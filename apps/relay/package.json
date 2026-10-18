@@ -1,0 +1,23 @@
+{
+  "name": "@pfa/relay",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "wrangler deploy --dry-run --outdir dist",
+    "dev": "wrangler dev",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@pfa/protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261016.1",
+    "@pfa/config": "workspace:*",
+    "@types/libsodium-wrappers": "^0.8.2",
+    "@types/node": "^26.6.5",
+    "libsodium-wrappers": "^0.8.4",
+    "miniflare": "^4.20260730.0",
+    "wrangler": "^4.151.1"
+  }
+}

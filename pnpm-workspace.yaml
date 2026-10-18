@@ -1,3 +1,8 @@
 packages:
   - apps/*
   - packages/*
+
+# Keep one copy of Vite and Vitest across all packages (Vite+ requirement; avoids TanStack Start 404s in dev).
+overrides:
+  vite: npm:@voidzero-dev/vite-plus-core@1.3.0
+  vitest: 5.0.5

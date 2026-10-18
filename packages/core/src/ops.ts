@@ -1,5 +1,7 @@
 import type { Hlc } from "./hlc";
 
+export type OpValue = string | number;
+
 export type Entity = "transaction" | "line";
 
 /** One field of one record set to a value. The op log is a list of these. */
@@ -10,5 +12,5 @@ export interface Op {
   entity: Entity;
   recordId: string;
   field: string;
-  value: string | number;
+  value: OpValue;
 }

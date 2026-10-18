@@ -1,7 +1,7 @@
-import type { Clock, Random, Storage } from "./adapters";
+import type { Clock, OpStore, Random } from "./adapters";
 import { compareHlc, type Hlc } from "./hlc";
 import { newUuidV7 } from "./ids";
-import type { Entity, Op } from "./ops";
+import type { Entity, Op, OpValue } from "./ops";
 import { assertAmount, assertDate, assertTime } from "./validate";
 
 export interface Line {
@@ -24,6 +24,10 @@ export interface Transaction {
   lines: Line[];
   /** Always the sum of the Lines; never stored. */
   total: number;
+  /** Epoch ms (UTC) when it was recorded. Machine time: never drives reports. */
+  createdAt: number;
+  /** Epoch ms (UTC) of the latest change to the Transaction or any of its Lines. */
+  updatedAt: number;
 }
 
 export interface NewLine {
@@ -41,9 +45,7 @@ export interface NewTransaction {
   lines: NewLine[];
 }
 
-export type TransactionPatch = Partial<
-  Pick<NewTransaction, "accountId" | "date" | "time" | "payee" | "note">
->;
+export type TransactionPatch = Partial<Omit<NewTransaction, "lines">>;
 
 export type LinePatch = Partial<NewLine>;
 
@@ -51,7 +53,7 @@ export interface EngineOptions {
   deviceId: string;
   clock: Clock;
   random: Random;
-  storage: Storage;
+  store: OpStore;
 }
 
 export interface Engine {
@@ -61,171 +63,189 @@ export interface Engine {
   /** Marks the Transaction deleted with a tombstone; history stays in the op log. */
   deleteTransaction(id: string): Promise<void>;
   getTransaction(id: string): Promise<Transaction | undefined>;
+  /** Live Transactions, oldest date first. */
+  listTransactions(): Promise<Transaction[]>;
   /** Every op this device holds, to send to another device. */
   exportOps(): Promise<Op[]>;
   /** Merge ops from another device. Safe to repeat and to deliver in any order. */
   applyOps(ops: readonly Op[]): Promise<void>;
-  /** Live Transactions, oldest date first. */
-  listTransactions(): Promise<Transaction[]>;
 }
 
-type Fields = Map<string, { value: string | number; hlc: Hlc }>;
+type Fields = Map<string, { value: OpValue; hlc: Hlc }>;
+
+const TRANSACTION_FIELDS = ["accountId", "date", "time", "payee", "note"] as const;
+const LINE_FIELDS = ["categoryId", "amount", "itemName"] as const;
+
+const byId = (a: { id: string }, b: { id: string }) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 
 export async function createEngine(options: EngineOptions): Promise<Engine> {
-  const { deviceId, clock, random, storage } = options;
-  const records = new Map<string, Fields>();
+  const { deviceId, clock, random, store } = options;
+  const transactions = new Map<string, Fields>();
+  const lines = new Map<string, Fields>();
+  const lineIdsByTransaction = new Map<string, Set<string>>();
   const seen = new Set<string>();
   let last: Hlc = { wall: 0, counter: 0, device: deviceId };
 
-  const key = (entity: Entity, id: string) => `${entity}:${id}`;
+  const table = (entity: Entity) => (entity === "transaction" ? transactions : lines);
 
   function fold(op: Op) {
-    if (seen.has(op.id)) return;
     seen.add(op.id);
-    const k = key(op.entity, op.recordId);
-    let fields = records.get(k);
-    if (!fields) records.set(k, (fields = new Map()));
+    // Anything local that is written later must order after every op already known.
+    if (compareHlc(op.hlc, last) > 0)
+      last = { wall: op.hlc.wall, counter: op.hlc.counter, device: deviceId };
+
+    const records = table(op.entity);
+    let fields = records.get(op.recordId);
+    if (!fields) records.set(op.recordId, (fields = new Map()));
     const current = fields.get(op.field);
-    if (!current || compareHlc(op.hlc, current.hlc) > 0) {
-      fields.set(op.field, { value: op.value, hlc: op.hlc });
+    if (current && compareHlc(op.hlc, current.hlc) <= 0) return;
+    fields.set(op.field, { value: op.value, hlc: op.hlc });
+
+    if (op.entity === "line" && op.field === "transactionId") {
+      const owned = lineIdsByTransaction.get(String(op.value)) ?? new Set<string>();
+      owned.add(op.recordId);
+      lineIdsByTransaction.set(String(op.value), owned);
     }
   }
 
-  for (const op of await storage.readAll()) fold(op);
+  for (const op of await store.readAll()) fold(op);
 
   function tick(): Hlc {
     const wall = Math.max(last.wall, clock.now());
     const counter = wall === last.wall ? last.counter + 1 : 0;
-    last = { wall, counter, device: deviceId };
-    return last;
+    return { wall, counter, device: deviceId };
   }
 
-  function makeOp(entity: Entity, recordId: string, field: string, value: string | number): Op {
-    return { id: newUuidV7(clock, random), hlc: tick(), entity, recordId, field, value };
-  }
-
-  function read(entity: Entity, id: string): Record<string, string | number> | undefined {
-    const fields = records.get(key(entity, id));
-    if (!fields) return undefined;
-    const out: Record<string, string | number> = {};
-    for (const [name, { value }] of fields) out[name] = value;
-    return out;
-  }
-
-  function toTransaction(id: string): Transaction | undefined {
-    const t = read("transaction", id);
-    if (!t || t["deletedAt"] !== undefined) return undefined;
-    const lines: Line[] = [];
-    for (const [k] of records) {
-      if (!k.startsWith("line:")) continue;
-      const lineId = k.slice(5);
-      const l = read("line", lineId)!;
-      if (l["transactionId"] !== id) continue;
-      lines.push({
-        id: lineId,
-        categoryId: l["categoryId"] as string,
-        amount: l["amount"] as number,
-        ...(l["itemName"] !== undefined ? { itemName: l["itemName"] as string } : {}),
-      });
+  function opsFor(
+    entity: Entity,
+    recordId: string,
+    values: Record<string, OpValue | undefined>,
+  ): Op[] {
+    const out: Op[] = [];
+    for (const [field, value] of Object.entries(values)) {
+      if (value === undefined) continue;
+      const hlc = tick();
+      last = hlc;
+      out.push({ id: newUuidV7(clock, random), hlc, entity, recordId, field, value });
     }
-    lines.sort((a, b) => (a.id < b.id ? -1 : 1));
-    return {
-      id,
-      accountId: t["accountId"] as string,
-      date: t["date"] as string,
-      ...(t["time"] !== undefined ? { time: t["time"] as string } : {}),
-      ...(t["payee"] !== undefined ? { payee: t["payee"] as string } : {}),
-      ...(t["note"] !== undefined ? { note: t["note"] as string } : {}),
-      lines,
-      total: lines.reduce((sum, l) => sum + l.amount, 0),
-    };
+    return out;
   }
 
   async function commit(ops: readonly Op[]) {
     const fresh: Op[] = [];
-    const queued = new Set<string>();
     for (const op of ops) {
-      if (seen.has(op.id) || queued.has(op.id)) continue;
-      queued.add(op.id);
+      if (seen.has(op.id)) continue;
+      seen.add(op.id);
       fresh.push(op);
     }
-    await storage.append(fresh);
-    for (const op of fresh) {
-      fold(op);
-      // Later local edits must order after anything received, even from a fast clock.
-      if (compareHlc(op.hlc, last) > 0)
-        last = { wall: op.hlc.wall, counter: op.hlc.counter, device: deviceId };
+    await store.append(fresh);
+    for (const op of fresh) fold(op);
+  }
+
+  function isLive(id: string): boolean {
+    const fields = transactions.get(id);
+    return fields !== undefined && !fields.has("deletedAt");
+  }
+
+  function assertLive(id: string) {
+    if (!isLive(id)) throw new Error(`Transaction ${id} does not exist or was deleted`);
+  }
+
+  function text(fields: Fields, name: string): string | undefined {
+    const value = fields.get(name)?.value;
+    return value === undefined ? undefined : String(value);
+  }
+
+  function readLine(lineId: string): Line {
+    const f = lines.get(lineId)!;
+    const itemName = text(f, "itemName");
+    return {
+      id: lineId,
+      categoryId: text(f, "categoryId")!,
+      amount: Number(f.get("amount")!.value),
+      ...(itemName !== undefined ? { itemName } : {}),
+    };
+  }
+
+  function readTransaction(id: string): Transaction | undefined {
+    if (!isLive(id)) return undefined;
+    const f = transactions.get(id)!;
+    const owned = [...(lineIdsByTransaction.get(id) ?? [])].sort();
+    const time = text(f, "time");
+    const payee = text(f, "payee");
+    const note = text(f, "note");
+    let updatedAt = 0;
+    for (const fields of [f, ...owned.map((lineId) => lines.get(lineId)!)]) {
+      for (const { hlc } of fields.values()) updatedAt = Math.max(updatedAt, hlc.wall);
     }
+    const ownedLines = owned.map(readLine);
+    return {
+      id,
+      accountId: text(f, "accountId")!,
+      date: text(f, "date")!,
+      ...(time !== undefined ? { time } : {}),
+      ...(payee !== undefined ? { payee } : {}),
+      ...(note !== undefined ? { note } : {}),
+      lines: ownedLines,
+      total: ownedLines.reduce((sum, line) => sum + line.amount, 0),
+      createdAt: Number(f.get("createdAt")!.value),
+      updatedAt,
+    };
+  }
+
+  function validateTransactionFields(values: TransactionPatch) {
+    if (values.date !== undefined) assertDate(values.date);
+    if (values.time !== undefined) assertTime(values.time);
+  }
+
+  function pick<K extends string>(source: Partial<Record<K, OpValue>>, keys: readonly K[]) {
+    return Object.fromEntries(keys.map((key) => [key, source[key]])) as Record<
+      K,
+      OpValue | undefined
+    >;
   }
 
   return {
     async recordTransaction(input) {
-      assertDate(input.date);
-      if (input.time !== undefined) assertTime(input.time);
+      validateTransactionFields(input);
       if (input.lines.length === 0) throw new Error("A Transaction needs at least one Line");
       for (const line of input.lines) assertAmount(line.amount);
+
       const id = newUuidV7(clock, random);
-      const ops: Op[] = [];
-      for (const field of ["accountId", "date", "time", "payee", "note"] as const) {
-        const value = input[field];
-        if (value !== undefined) ops.push(makeOp("transaction", id, field, value));
-      }
+      const ops = opsFor("transaction", id, {
+        ...pick(input, TRANSACTION_FIELDS),
+        createdAt: clock.now(),
+      });
       for (const line of input.lines) {
         const lineId = newUuidV7(clock, random);
-        ops.push(makeOp("line", lineId, "transactionId", id));
-        ops.push(makeOp("line", lineId, "categoryId", line.categoryId));
-        ops.push(makeOp("line", lineId, "amount", line.amount));
-        if (line.itemName !== undefined)
-          ops.push(makeOp("line", lineId, "itemName", line.itemName));
+        ops.push(...opsFor("line", lineId, { transactionId: id, ...pick(line, LINE_FIELDS) }));
       }
       await commit(ops);
-      return toTransaction(id)!;
+      return readTransaction(id)!;
     },
     async editTransaction(id, patch) {
-      if (patch.date !== undefined) assertDate(patch.date);
-      if (patch.time !== undefined) assertTime(patch.time);
-      const ops: Op[] = [];
-      for (const field of ["accountId", "date", "time", "payee", "note"] as const) {
-        const value = patch[field];
-        if (value !== undefined) ops.push(makeOp("transaction", id, field, value));
-      }
-      await commit(ops);
+      assertLive(id);
+      validateTransactionFields(patch);
+      await commit(opsFor("transaction", id, pick(patch, TRANSACTION_FIELDS)));
     },
     async editLine(transactionId, lineId, patch) {
-      const line = read("line", lineId);
-      if (!line || line["transactionId"] !== transactionId) {
+      assertLive(transactionId);
+      if (!lineIdsByTransaction.get(transactionId)?.has(lineId)) {
         throw new Error(`Line ${lineId} does not belong to Transaction ${transactionId}`);
       }
       if (patch.amount !== undefined) assertAmount(patch.amount);
-      const ops: Op[] = [];
-      for (const field of ["categoryId", "amount", "itemName"] as const) {
-        const value = patch[field];
-        if (value !== undefined) ops.push(makeOp("line", lineId, field, value));
-      }
-      await commit(ops);
-    },
-    async exportOps() {
-      return storage.readAll();
-    },
-    async applyOps(ops) {
-      await commit(ops);
+      await commit(opsFor("line", lineId, pick(patch, LINE_FIELDS)));
     },
     async deleteTransaction(id) {
-      await commit([makeOp("transaction", id, "deletedAt", clock.now())]);
+      assertLive(id);
+      await commit(opsFor("transaction", id, { deletedAt: clock.now() }));
     },
-    async getTransaction(id) {
-      return toTransaction(id);
-    },
+    getTransaction: async (id) => readTransaction(id),
     async listTransactions() {
-      const out: Transaction[] = [];
-      for (const k of records.keys()) {
-        if (!k.startsWith("transaction:")) continue;
-        const t = toTransaction(k.slice(12));
-        if (t) out.push(t);
-      }
-      return out.sort((a, b) =>
-        a.date === b.date ? (a.id < b.id ? -1 : 1) : a.date < b.date ? -1 : 1,
-      );
+      const live = [...transactions.keys()].flatMap((id) => readTransaction(id) ?? []);
+      return live.sort((a, b) => (a.date === b.date ? byId(a, b) : a.date < b.date ? -1 : 1));
     },
+    exportOps: () => store.readAll(),
+    applyOps: (ops) => commit(ops),
   };
 }

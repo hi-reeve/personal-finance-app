@@ -10,7 +10,8 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@pfa/protocol": "workspace:*"
+    "@pfa/protocol": "workspace:*",
+    "date-fns": "^4.4.0"
   },
   "devDependencies": {
     "@pfa/config": "workspace:*"

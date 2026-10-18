@@ -1,12 +1,4 @@
-export {
-  createManualClock,
-  createMemoryStorage,
-  createSeededRandom,
-  type Clock,
-  type ManualClock,
-  type Random,
-  type Storage,
-} from "./adapters";
+export { createMemoryStore, type Clock, type OpStore, type Random } from "./adapters";
 export {
   createEngine,
   type Engine,
@@ -18,3 +10,4 @@ export {
   type Transaction,
   type TransactionPatch,
 } from "./engine";
+export type { Op } from "./ops";

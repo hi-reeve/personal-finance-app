@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
-import { createEngine, createManualClock, createMemoryStorage, createSeededRandom } from "./index";
+import { createEngine, createMemoryStore } from "./index";
+import { createManualClock, createSeededRandom } from "./testing";
 
 const UUID_V7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
@@ -9,7 +10,7 @@ async function device(deviceId: string, seed = 1, startMs = 1_700_000_000_000) {
     deviceId,
     clock,
     random: createSeededRandom(seed),
-    storage: createMemoryStorage(),
+    store: createMemoryStore(),
   });
   return { engine, clock };
 }
@@ -35,6 +36,8 @@ describe("recording a Transaction", () => {
       payee: "Warung Bu Sari",
       lines: [{ id: recorded.lines[0]!.id, categoryId: "cat-food", amount: 25_000 }],
       total: 25_000,
+      createdAt: 1_700_000_000_000,
+      updatedAt: 1_700_000_000_000,
     });
     expect(recorded.id).toMatch(UUID_V7);
     expect(recorded.lines[0]!.id).toMatch(UUID_V7);
@@ -215,5 +218,103 @@ describe("two devices exchanging their op logs", () => {
     const onA = (await a.engine.getTransaction(t.id))?.note;
     const onB = (await b.engine.getTransaction(t.id))?.note;
     expect(onA).toBe(onB);
+  });
+});
+
+describe("machine times", () => {
+  it("stamps createdAt at recording and updatedAt at the latest edit, in epoch ms", async () => {
+    const { engine, clock } = await device("dev-a", 1, 1_700_000_000_000);
+    const recorded = await engine.recordTransaction({
+      accountId: "acc-1",
+      date: "2026-10-17",
+      lines: [{ categoryId: "cat-food", amount: 1_000 }],
+    });
+    expect(recorded.createdAt).toBe(1_700_000_000_000);
+    expect(recorded.updatedAt).toBe(1_700_000_000_000);
+
+    clock.advance(60_000);
+    await engine.editLine(recorded.id, recorded.lines[0]!.id, { amount: 2_000 });
+    const read = await engine.getTransaction(recorded.id);
+    expect(read?.createdAt).toBe(1_700_000_000_000);
+    expect(read?.updatedAt).toBe(1_700_000_060_000);
+  });
+});
+
+describe("a device that restarts", () => {
+  it("keeps ordering its edits after what it already stored, even if its clock went backwards", async () => {
+    const store = createMemoryStore();
+    const first = await createEngine({
+      deviceId: "dev-a",
+      clock: createManualClock(1_700_000_900_000),
+      random: createSeededRandom(1),
+      store,
+    });
+    const t = await first.recordTransaction({
+      accountId: "acc-1",
+      date: "2026-10-17",
+      note: "before restart",
+      lines: [{ categoryId: "cat-food", amount: 1 }],
+    });
+
+    const afterRestart = await createEngine({
+      deviceId: "dev-a",
+      clock: createManualClock(1_700_000_000_000), // clock now 15 minutes behind the stored ops
+      random: createSeededRandom(2),
+      store,
+    });
+    await afterRestart.editTransaction(t.id, { note: "after restart" });
+    expect((await afterRestart.getTransaction(t.id))?.note).toBe("after restart");
+  });
+});
+
+describe("records that do not exist or are deleted", () => {
+  const base = {
+    accountId: "acc-1",
+    date: "2026-10-17",
+    lines: [{ categoryId: "cat-food", amount: 1 }],
+  };
+
+  it("refuses to edit or delete an unknown Transaction and leaves no trace", async () => {
+    const { engine } = await device("dev-a");
+    await expect(engine.editTransaction("nope", { note: "x" })).rejects.toThrow();
+    await expect(engine.deleteTransaction("nope")).rejects.toThrow();
+    expect(await engine.listTransactions()).toEqual([]);
+  });
+
+  it("refuses to edit a deleted Transaction", async () => {
+    const { engine } = await device("dev-a");
+    const t = await engine.recordTransaction(base);
+    await engine.deleteTransaction(t.id);
+    await expect(engine.editTransaction(t.id, { note: "x" })).rejects.toThrow();
+  });
+
+  it("refuses to edit a Line through the wrong Transaction", async () => {
+    const { engine } = await device("dev-a");
+    const t1 = await engine.recordTransaction(base);
+    const t2 = await engine.recordTransaction(base);
+    await expect(engine.editLine(t2.id, t1.lines[0]!.id, { amount: 5 })).rejects.toThrow();
+  });
+});
+
+describe("a delete racing an edit", () => {
+  it("converges on both devices whichever happened later", async () => {
+    const a = await device("dev-a", 11);
+    const b = await device("dev-b", 22);
+    const t = await a.engine.recordTransaction({
+      accountId: "acc-1",
+      date: "2026-10-17",
+      lines: [{ categoryId: "cat-food", amount: 1 }],
+    });
+    await b.engine.applyOps(await a.engine.exportOps());
+
+    a.clock.advance(1_000);
+    b.clock.advance(2_000);
+    await a.engine.editTransaction(t.id, { note: "edited on A" });
+    await b.engine.deleteTransaction(t.id);
+    await a.engine.applyOps(await b.engine.exportOps());
+    await b.engine.applyOps(await a.engine.exportOps());
+
+    expect(await a.engine.listTransactions()).toEqual(await b.engine.listTransactions());
+    expect(await a.engine.getTransaction(t.id)).toBeUndefined();
   });
 });

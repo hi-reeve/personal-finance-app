@@ -33,7 +33,14 @@ describe("formatMoney", () => {
     expect(formatMoney(1000, "JPY", commaDot)).toBe("¥1,000");
   });
 
+  it("shows negative zero as plain zero", () => {
+    expect(formatMoney(-0, "IDR", dotComma)).toBe("Rp 0");
+    expect(formatMoney(-0, "USD", commaDot)).toBe("$0.00");
+  });
+
   it("rejects amounts that are not whole minor units and unknown currencies", () => {
+    expect(() => formatMoney(Number.MAX_SAFE_INTEGER + 1, "USD", commaDot)).toThrow();
+    expect(() => formatMoney(100, "toString" as never, commaDot)).toThrow();
     expect(() => formatMoney(1.5, "USD", commaDot)).toThrow();
     expect(() => formatMoney(100, "XXX" as never, commaDot)).toThrow();
   });

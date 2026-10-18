@@ -1,0 +1,7 @@
+{
+  "name": "pfa-relay",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-01",
+  "durable_objects": { "bindings": [{ "name": "SPACE", "class_name": "SpaceObject" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["SpaceObject"] }],
+}

@@ -1,0 +1,5 @@
+# Real bank exports and receipt photos. Never commit.
+docs/samples-private/
+
+# macOS
+.DS_Store

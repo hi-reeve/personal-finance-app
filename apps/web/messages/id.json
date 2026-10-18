@@ -1,6 +1,5 @@
 {
   "$schema": "https://inlang.com/schema/inlang-message-format",
-  "preview_title": "Keuangan pribadi",
   "preview_subtitle": "Protokol v{version}. Pratinjau fondasi desain.",
   "section_amounts": "Jumlah",
   "section_appearance": "Tampilan",
@@ -15,5 +14,25 @@
   "sample_income": "Gaji",
   "sample_total": "Pengeluaran bulan ini",
   "sample_date": "Hari ini {date}",
-  "badge_overdue": "Terlambat"
+  "badge_overdue": "Terlambat",
+  "nav_home": "Beranda",
+  "nav_activity": "Aktivitas",
+  "nav_add": "Tambah",
+  "nav_plan": "Rencana",
+  "nav_more": "Lainnya",
+  "nav_budgets": "Anggaran",
+  "nav_recurring": "Berulang & tagihan",
+  "nav_accounts": "Akun",
+  "nav_debts": "Utang & pinjaman",
+  "nav_split": "Patungan",
+  "nav_reports": "Laporan",
+  "nav_settings": "Pengaturan",
+  "nav_group_plan": "Rencana",
+  "nav_group_money": "Uang",
+  "nav_group_insights": "Wawasan",
+  "nav_label": "Utama",
+  "add_transaction": "Tambah transaksi",
+  "add_close": "Tutup",
+  "add_placeholder": "Formulir transaksi hadir di tiket berikutnya.",
+  "app_name": "Keuangan pribadi"
 }

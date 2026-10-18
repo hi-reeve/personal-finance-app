@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { HeadContent, Outlet, Scripts, createRootRoute } from "@tanstack/react-router";
 import { themeCss } from "@pfa/tokens";
 import { APPEARANCE_INIT_SCRIPT, AppearanceProvider } from "../components/appearance";
+import { AppShell } from "../components/app-shell";
 import { HideAmountsProvider } from "../components/hide-amounts";
 import { LocaleProvider } from "../components/locale";
 import { PwaBanner } from "../pwa/pwa-banner";
@@ -43,7 +44,9 @@ function Root() {
             onApply={pwa.applyUpdate}
             onInstall={pwa.install}
           />
-          <Outlet />
+          <AppShell>
+            <Outlet />
+          </AppShell>
         </HideAmountsProvider>
       </LocaleProvider>
     </AppearanceProvider>

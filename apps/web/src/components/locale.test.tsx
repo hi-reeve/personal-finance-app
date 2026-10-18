@@ -7,7 +7,7 @@ function Sample() {
   const { t, money, date } = useLocale();
   return (
     <>
-      <p data-testid="title">{t.preview_title()}</p>
+      <p data-testid="title">{t.app_name()}</p>
       <p data-testid="rupiah">{money(25000, "IDR")}</p>
       <p data-testid="dollars">{money(123450, "USD")}</p>
       <p data-testid="date">{date("2026-10-18")}</p>

@@ -11,3 +11,7 @@ dist/
 *.log
 .env
 .dev.vars
+
+# Playwright
+test-results/
+playwright-report/

@@ -5,9 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vp dev",
-    "build": "vp build",
+    "build": "vp build && node scripts/precache.ts dist/client",
     "preview": "vp preview",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@ark-ui/react": "^5.39.3",
@@ -22,6 +23,7 @@
   },
   "devDependencies": {
     "@pfa/config": "workspace:*",
+    "@playwright/test": "^1.64.1",
     "@tailwindcss/vite": "^4.3.3",
     "@testing-library/react": "^16.3.3",
     "@types/node": "^26.6.5",

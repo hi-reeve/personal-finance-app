@@ -1,0 +1,5 @@
+# Cloudflare static hosting. Browsers must always re-check the service worker and the shell.
+/sw.js
+  Cache-Control: no-cache
+/_shell.html
+  Cache-Control: no-cache

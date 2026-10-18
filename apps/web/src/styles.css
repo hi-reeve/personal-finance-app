@@ -1,1 +1,24 @@
 @import "tailwindcss";
+
+/* Colours come from the tokens package as CSS variables; this maps them to Tailwind utilities. */
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-line: var(--line);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-accent: var(--accent);
+  --color-on-accent: var(--on-accent);
+  --color-income: var(--income);
+  --color-expense: var(--expense);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
+  --color-danger: var(--danger);
+  --color-on-danger: var(--on-danger);
+}
+
+body {
+  background: var(--canvas);
+  color: var(--ink);
+}

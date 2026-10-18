@@ -20,6 +20,13 @@ describe.each(themeNames)("%s theme meets WCAG 2.2 AA", (theme) => {
     expect(contrastRatio(base.inkMuted, base[ground])).toBeGreaterThanOrEqual(AA_TEXT);
   });
 
+  it.each(["canvas", "surface"] as const)(
+    "form control borders are visible against the %s (3:1)",
+    (ground) => {
+      expect(contrastRatio(base.control, base[ground])).toBeGreaterThanOrEqual(3);
+    },
+  );
+
   it.each(Object.keys(accents))(
     "the %s accent works as a fill with its foreground and as text",
     (name) => {

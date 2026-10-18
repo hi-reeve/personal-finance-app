@@ -1,11 +1,12 @@
 import { SegmentGroup } from "@ark-ui/react/segment-group";
+import { accentNames, colorPresetNames } from "@pfa/tokens";
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
 const STORAGE_KEY = "pfa.appearance";
 
 export const THEME_CHOICES = ["system", "light", "dark"] as const;
-export const ACCENT_CHOICES = ["terracotta", "brown", "teal", "slate", "sage", "plum"] as const;
-export const COLOR_CHOICES = ["classic", "colorblind"] as const;
+export const ACCENT_CHOICES = accentNames;
+export const COLOR_CHOICES = colorPresetNames;
 
 export interface Appearance {
   theme: (typeof THEME_CHOICES)[number];
@@ -64,15 +65,13 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
     () => ({
       appearance,
       setAppearance(patch) {
-        setCurrent((current) => {
-          const next = { ...current, ...patch };
-          try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-          } catch {
-            // Storage can be blocked; the choice then lasts only for this session.
-          }
-          return next;
-        });
+        const next = { ...appearance, ...patch };
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+        } catch {
+          // Storage can be blocked; the choice then lasts only for this session.
+        }
+        setCurrent(next);
       },
     }),
     [appearance],
@@ -102,6 +101,23 @@ const COLOR_LABEL: Record<Appearance["colors"], string> = {
   colorblind: "Colour-blind safe",
 };
 
+/** The selected choice is marked with a check as well as a fill, so it never relies on colour alone. */
+function CheckMark() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 16 16"
+      width="14"
+      height="14"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <path d="m3 8.5 3.2 3L13 4.5" />
+    </svg>
+  );
+}
+
 function Choice<T extends string>({
   label,
   options,
@@ -126,8 +142,11 @@ function Choice<T extends string>({
         <SegmentGroup.Item
           key={option}
           value={option}
-          className="flex min-h-11 cursor-pointer items-center rounded-lg border border-line bg-surface px-3 text-ink data-[state=checked]:border-accent data-[state=checked]:bg-accent data-[state=checked]:text-on-accent"
+          className="flex min-h-11 cursor-pointer items-center gap-1.5 rounded-lg border border-control bg-surface px-3 text-ink has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-accent data-[state=checked]:border-accent data-[state=checked]:bg-accent data-[state=checked]:text-on-accent"
         >
+          <SegmentGroup.ItemContext>
+            {(item) => (item.checked ? <CheckMark /> : null)}
+          </SegmentGroup.ItemContext>
           <SegmentGroup.ItemText>{labels[option]}</SegmentGroup.ItemText>
           <SegmentGroup.ItemHiddenInput />
         </SegmentGroup.Item>
@@ -169,4 +188,4 @@ export function AppearanceControls() {
  * Runs before first paint so the saved theme shows without a flash. Mirrors `apply` above:
  * reads the same storage key and sets the same attributes.
  */
-export const APPEARANCE_INIT_SCRIPT = `try{var a=JSON.parse(localStorage.getItem("${STORAGE_KEY}")||"null");if(a){var r=document.documentElement;if(a.theme==="light"||a.theme==="dark")r.setAttribute("data-theme",a.theme);if(a.accent&&a.accent!=="${DEFAULTS.accent}")r.setAttribute("data-accent",a.accent);if(a.colors&&a.colors!=="${DEFAULTS.colors}")r.setAttribute("data-colors",a.colors)}}catch(e){}`;
+export const APPEARANCE_INIT_SCRIPT = `try{var a=JSON.parse(localStorage.getItem("${STORAGE_KEY}")||"null");if(a){var r=document.documentElement;var ok=function(list,v){return list.indexOf(v)>-1};if(a.theme==="light"||a.theme==="dark")r.setAttribute("data-theme",a.theme);if(a.accent!=="${DEFAULTS.accent}"&&ok(${JSON.stringify(ACCENT_CHOICES)},a.accent))r.setAttribute("data-accent",a.accent);if(a.colors!=="${DEFAULTS.colors}"&&ok(${JSON.stringify(COLOR_CHOICES)},a.colors))r.setAttribute("data-colors",a.colors)}}catch(e){}`;

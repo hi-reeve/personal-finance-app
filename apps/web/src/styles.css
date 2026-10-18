@@ -5,6 +5,7 @@
   --color-canvas: var(--canvas);
   --color-surface: var(--surface);
   --color-line: var(--line);
+  --color-control: var(--control);
   --color-ink: var(--ink);
   --color-ink-muted: var(--ink-muted);
   --color-accent: var(--accent);

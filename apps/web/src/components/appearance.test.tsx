@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
-import { AppearanceControls, AppearanceProvider } from "./appearance";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { APPEARANCE_INIT_SCRIPT, AppearanceControls, AppearanceProvider } from "./appearance";
 
 const root = () => document.documentElement;
 
@@ -67,5 +67,58 @@ describe("appearance", () => {
     localStorage.setItem("pfa.appearance", "{not json");
     mount();
     expect(root().hasAttribute("data-theme")).toBe(false);
+  });
+
+  it("marks the selected choice with a check as well as a fill", async () => {
+    mount();
+    const labelOf = (name: string) => screen.getByLabelText(name).closest("label")!;
+    expect(labelOf("System").querySelector("svg")).not.toBeNull();
+    expect(labelOf("Dark").querySelector("svg")).toBeNull();
+
+    fireEvent.click(screen.getByLabelText("Dark"));
+    await waitFor(() => expect(labelOf("Dark").querySelector("svg")).not.toBeNull());
+    expect(labelOf("System").querySelector("svg")).toBeNull();
+  });
+
+  it("still applies a choice when storage is blocked", async () => {
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("blocked");
+    });
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("blocked");
+    });
+    mount();
+    fireEvent.click(screen.getByLabelText("Dark"));
+    await waitFor(() => expect(root().getAttribute("data-theme")).toBe("dark"));
+    vi.restoreAllMocks();
+  });
+});
+
+describe("the script that runs before first paint", () => {
+  const run = () => new Function(APPEARANCE_INIT_SCRIPT)();
+
+  it("applies a saved choice", () => {
+    localStorage.setItem(
+      "pfa.appearance",
+      JSON.stringify({ theme: "dark", accent: "sage", colors: "colorblind" }),
+    );
+    run();
+    expect(root().getAttribute("data-theme")).toBe("dark");
+    expect(root().getAttribute("data-accent")).toBe("sage");
+    expect(root().getAttribute("data-colors")).toBe("colorblind");
+  });
+
+  it("ignores values it does not recognise and unreadable data", () => {
+    localStorage.setItem(
+      "pfa.appearance",
+      JSON.stringify({ theme: "neon", accent: "<script>", colors: 7 }),
+    );
+    run();
+    expect(root().hasAttribute("data-theme")).toBe(false);
+    expect(root().hasAttribute("data-accent")).toBe(false);
+    expect(root().hasAttribute("data-colors")).toBe(false);
+
+    localStorage.setItem("pfa.appearance", "{not json");
+    expect(run).not.toThrow();
   });
 });

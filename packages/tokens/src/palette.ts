@@ -5,6 +5,8 @@ export interface BaseTheme {
   canvas: string;
   surface: string;
   line: string;
+  /** Border of interactive controls: at least 3:1 against canvas and surface (WCAG 1.4.11). */
+  control: string;
   ink: string;
   inkMuted: string;
 }
@@ -14,6 +16,7 @@ export const themes: Record<ThemeName, BaseTheme> = {
     canvas: "#f3ebdd",
     surface: "#fbf6ec",
     line: "#dccfba",
+    control: "#8c7a64",
     ink: "#3b2a20",
     inkMuted: "#6b5848",
   },
@@ -21,6 +24,7 @@ export const themes: Record<ThemeName, BaseTheme> = {
     canvas: "#1f1814",
     surface: "#2a211b",
     line: "#3e322a",
+    control: "#8b7a68",
     ink: "#f1e6d6",
     inkMuted: "#b9a692",
   },

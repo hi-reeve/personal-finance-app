@@ -35,11 +35,10 @@ export function HideAmountsProvider({
 }) {
   const [hidden, setHidden] = useState(() => initialHidden ?? readStored());
   const toggle = useCallback(() => {
-    setHidden((current) => {
-      store(!current);
-      return !current;
-    });
-  }, []);
+    const next = !hidden;
+    store(next);
+    setHidden(next);
+  }, [hidden]);
   const value = useMemo(() => ({ hidden, toggle }), [hidden, toggle]);
   return <HideAmountsContext.Provider value={value}>{children}</HideAmountsContext.Provider>;
 }

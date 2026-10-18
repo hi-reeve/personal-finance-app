@@ -14,7 +14,7 @@ const DEFAULT_ACCENT = "terracotta";
 const DEFAULT_COLORS = "classic";
 
 const base = (t: BaseTheme, scheme: ThemeName) =>
-  `color-scheme: ${scheme}; --canvas: ${t.canvas}; --surface: ${t.surface}; --line: ${t.line}; --ink: ${t.ink}; --ink-muted: ${t.inkMuted};`;
+  `color-scheme: ${scheme}; --canvas: ${t.canvas}; --surface: ${t.surface}; --line: ${t.line}; --control: ${t.control}; --ink: ${t.ink}; --ink-muted: ${t.inkMuted};`;
 const accent = (a: AccentColor) => `--accent: ${a.fill}; --on-accent: ${a.onFill};`;
 const semantic = (s: SemanticColors) =>
   `--income: ${s.income}; --expense: ${s.expense}; --success: ${s.success}; --warning: ${s.warning}; --info: ${s.info}; --danger: ${s.danger}; --on-danger: ${s.onDanger};`;

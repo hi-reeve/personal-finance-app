@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { Amount } from "./amount";
 import { HideAmountsProvider, HideAmountsToggle } from "./hide-amounts";
 
@@ -85,5 +85,33 @@ describe("hide amounts", () => {
       </HideAmountsProvider>,
     );
     expect(screen.queryByText("Rp 9.000")).toBeNull();
+  });
+
+  it("shows amounts when the remembered value is anything unexpected", () => {
+    localStorage.setItem("pfa.hideAmounts", "banana");
+    render(
+      <HideAmountsProvider>
+        <Amount direction="income" variant="list" formatted="Rp 9.000" />
+      </HideAmountsProvider>,
+    );
+    expect(screen.getByText("Rp 9.000")).toBeTruthy();
+  });
+
+  it("still toggles when storage is blocked", () => {
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("blocked");
+    });
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("blocked");
+    });
+    render(
+      <HideAmountsProvider>
+        <HideAmountsToggle />
+        <Amount direction="income" variant="list" formatted="Rp 9.000" />
+      </HideAmountsProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /hide amounts/i }));
+    expect(screen.queryByText("Rp 9.000")).toBeNull();
+    vi.restoreAllMocks();
   });
 });

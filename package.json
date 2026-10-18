@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "prepare": "husky",
-    "lint": "vp lint",
+    "lint": "vp lint -c .oxlintrc.json",
     "fmt": "vp fmt --write",
     "fmt:check": "vp fmt --check",
     "typecheck": "pnpm -r typecheck",

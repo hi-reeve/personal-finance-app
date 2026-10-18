@@ -92,6 +92,15 @@ describe("navigation layouts", () => {
   });
 });
 
+describe("keyboard", () => {
+  it("offers a skip link that targets the main content", async () => {
+    await mount();
+    const skip = screen.getByRole("link", { name: "Skip to content" });
+    expect(skip.getAttribute("href")).toBe("#main");
+    expect(screen.getByRole("main").id).toBe("main");
+  });
+});
+
 describe("Add", () => {
   it("opens from the phone bar, and closes with Escape", async () => {
     await mount();

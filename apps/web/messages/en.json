@@ -34,5 +34,6 @@
   "add_transaction": "Add transaction",
   "add_close": "Close",
   "add_placeholder": "The transaction form arrives with the next tickets.",
-  "app_name": "Personal finance"
+  "app_name": "Personal finance",
+  "skip_to_content": "Skip to content"
 }

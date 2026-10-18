@@ -218,6 +218,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key.toLowerCase() !== "n") return;
+      if (event.repeat || event.defaultPrevented) return;
       if (event.ctrlKey || event.metaKey || event.altKey || isTyping(event.target)) return;
       setAdding(true);
     };
@@ -227,9 +228,17 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-dvh md:pl-24 lg:pl-64">
+      <a
+        href="#main"
+        className={`sr-only z-50 rounded-lg bg-surface px-4 py-3 text-ink focus:not-sr-only focus:fixed focus:top-2 focus:left-2 ${FOCUS}`}
+      >
+        {t.skip_to_content()}
+      </a>
       <Rail pathname={pathname} />
       <Sidebar pathname={pathname} />
-      <main className="pb-[calc(6.5rem+env(safe-area-inset-bottom))] md:pb-28">{children}</main>
+      <main id="main" className="pb-[calc(6.5rem+env(safe-area-inset-bottom))] md:pb-28">
+        {children}
+      </main>
       <PhoneBar pathname={pathname} onAdd={() => setAdding(true)} />
       <button
         type="button"

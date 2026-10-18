@@ -1,0 +1,19 @@
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "preview_title": "Personal finance",
+  "preview_subtitle": "Protocol v{version}. Design foundation preview.",
+  "section_amounts": "Amounts",
+  "section_appearance": "Appearance",
+  "section_language": "Language and numbers",
+  "label_language": "Language",
+  "label_number_format": "Number format",
+  "language_en": "English",
+  "language_id": "Bahasa Indonesia",
+  "number_format_dot_comma": "1.234,50",
+  "number_format_comma_dot": "1,234.50",
+  "sample_expense": "Warung Bu Sari",
+  "sample_income": "Salary",
+  "sample_total": "Spent this month",
+  "sample_date": "Today is {date}",
+  "badge_overdue": "Overdue"
+}

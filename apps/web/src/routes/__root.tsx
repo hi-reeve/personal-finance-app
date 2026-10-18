@@ -3,6 +3,7 @@ import { HeadContent, Outlet, Scripts, createRootRoute } from "@tanstack/react-r
 import { themeCss } from "@pfa/tokens";
 import { APPEARANCE_INIT_SCRIPT, AppearanceProvider } from "../components/appearance";
 import { HideAmountsProvider } from "../components/hide-amounts";
+import { LocaleProvider } from "../components/locale";
 import { PwaBanner } from "../pwa/pwa-banner";
 import { usePwa } from "../pwa/use-pwa";
 import appCss from "../styles.css?url";
@@ -34,15 +35,17 @@ function Root() {
   const pwa = usePwa();
   return (
     <AppearanceProvider>
-      <HideAmountsProvider>
-        <PwaBanner
-          updateReady={pwa.updateReady}
-          canInstall={pwa.canInstall}
-          onApply={pwa.applyUpdate}
-          onInstall={pwa.install}
-        />
-        <Outlet />
-      </HideAmountsProvider>
+      <LocaleProvider>
+        <HideAmountsProvider>
+          <PwaBanner
+            updateReady={pwa.updateReady}
+            canInstall={pwa.canInstall}
+            onApply={pwa.applyUpdate}
+            onInstall={pwa.install}
+          />
+          <Outlet />
+        </HideAmountsProvider>
+      </LocaleProvider>
     </AppearanceProvider>
   );
 }

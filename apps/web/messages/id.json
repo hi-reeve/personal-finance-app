@@ -1,0 +1,19 @@
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "preview_title": "Keuangan pribadi",
+  "preview_subtitle": "Protokol v{version}. Pratinjau fondasi desain.",
+  "section_amounts": "Jumlah",
+  "section_appearance": "Tampilan",
+  "section_language": "Bahasa dan angka",
+  "label_language": "Bahasa",
+  "label_number_format": "Format angka",
+  "language_en": "English",
+  "language_id": "Bahasa Indonesia",
+  "number_format_dot_comma": "1.234,50",
+  "number_format_comma_dot": "1,234.50",
+  "sample_expense": "Warung Bu Sari",
+  "sample_income": "Gaji",
+  "sample_total": "Pengeluaran bulan ini",
+  "sample_date": "Hari ini {date}",
+  "badge_overdue": "Terlambat"
+}

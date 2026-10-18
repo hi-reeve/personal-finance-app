@@ -11,7 +11,8 @@
   },
   "dependencies": {
     "@pfa/protocol": "workspace:*",
-    "date-fns": "^4.4.0"
+    "date-fns": "^4.4.0",
+    "dinero.js": "2.0.2"
   },
   "devDependencies": {
     "@pfa/config": "workspace:*"

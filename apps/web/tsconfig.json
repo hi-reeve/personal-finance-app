@@ -4,7 +4,8 @@
     "jsx": "react-jsx",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": ["vite-plus/client", "node"],
-    "verbatimModuleSyntax": false
+    "verbatimModuleSyntax": false,
+    "allowJs": true
   },
   "include": ["src", "scripts/*.ts", "e2e/*.ts", "playwright.config.ts", "vite.config.ts"]
 }

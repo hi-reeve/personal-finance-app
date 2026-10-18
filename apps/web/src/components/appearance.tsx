@@ -118,7 +118,7 @@ function CheckMark() {
   );
 }
 
-function Choice<T extends string>({
+export function Choice<T extends string>({
   label,
   options,
   labels,

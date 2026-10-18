@@ -1,0 +1,31 @@
+{
+  "name": "@pfa/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vp dev",
+    "build": "vp build",
+    "preview": "vp preview",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@pfa/core": "workspace:*",
+    "@pfa/protocol": "workspace:*",
+    "@pfa/tokens": "workspace:*",
+    "@tanstack/react-router": "^1.170.45",
+    "@tanstack/react-start": "^1.169.3",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "tailwindcss": "^4.3.3"
+  },
+  "devDependencies": {
+    "@pfa/config": "workspace:*",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^26.6.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "vite": "npm:@voidzero-dev/vite-plus-core@1.3.0"
+  }
+}

@@ -10,15 +10,19 @@ const relayDir = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 /** The token the fake Turnstile service accepts. */
 export const VALID_TURNSTILE_TOKEN = "valid-token";
+/** A token for which the fake Turnstile service is down. */
+export const OUTAGE_TURNSTILE_TOKEN = "outage-token";
 
 export interface Relay {
   fetch: (path: string, init?: RequestInit) => Promise<Response>;
   dispatch: Miniflare["dispatchFetch"];
   dispose: () => Promise<void>;
+  /** Every address the Worker called out to, so tests can see where it really sent requests. */
+  outboundUrls: string[];
 }
 
 /** Builds the Worker and runs it in Cloudflare's local runtime, with a fake Turnstile service. */
-export async function startRelay(options: { debugCosts?: boolean } = {}): Promise<Relay> {
+export async function startRelay(options: { testMode?: boolean } = {}): Promise<Relay> {
   // Built inside the package: the local runtime failed to start when the build was in the OS temp folder.
   const outdir = join(relayDir, "dist");
   execFileSync(
@@ -29,19 +33,26 @@ export async function startRelay(options: { debugCosts?: boolean } = {}): Promis
       stdio: "ignore",
     },
   );
+  const outboundUrls: string[] = [];
+  const testMode = options.testMode !== false;
   const mf = new Miniflare({
     modules: true,
     scriptPath: join(outdir, "index.js"),
     compatibilityDate: "2026-08-01",
-    compatibilityFlags: ["nodejs_compat"],
     durableObjects: { SPACE: { className: "SpaceObject", useSQLite: true } },
     bindings: {
       TURNSTILE_SECRET: "test-secret",
       TURNSTILE_VERIFY_URL: "https://turnstile.test/siteverify",
-      ...(options.debugCosts === false ? {} : { DEBUG_COSTS: "1" }),
+      ...(testMode ? { TEST_MODE: "1" } : {}),
     },
     outboundService: async (request: MiniflareRequest) => {
+      outboundUrls.push(request.url);
       const body = (await request.json()) as { response?: string };
+      if (body.response === OUTAGE_TURNSTILE_TOKEN)
+        return MiniflareResponse.json(
+          { success: false, "error-codes": ["internal-error"] },
+          { status: 500 },
+        );
       return MiniflareResponse.json({ success: body.response === VALID_TURNSTILE_TOKEN });
     },
   });
@@ -50,6 +61,7 @@ export async function startRelay(options: { debugCosts?: boolean } = {}): Promis
       mf.dispatchFetch(`http://relay.test${path}`, init as never) as unknown as Promise<Response>,
     dispatch: mf.dispatchFetch.bind(mf),
     dispose: () => mf.dispose(),
+    outboundUrls,
   };
 }
 

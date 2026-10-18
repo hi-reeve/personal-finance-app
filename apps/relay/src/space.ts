@@ -1,17 +1,59 @@
 import { DurableObject } from "cloudflare:workers";
 import {
+  MAX_APPEND_BODY_BYTES,
+  MAX_DEVICE_ID_LENGTH,
+  MAX_FETCH_BYTES,
+  MAX_OPS_PER_APPEND,
   MAX_OP_BYTES,
+  MAX_PROTOCOL_VERSION,
   PROTOCOL_VERSION,
   base64UrlDecode,
   base64UrlEncode,
-  type AppendRequest,
   type AppendResponse,
   type FetchResponse,
+  type StoredOp,
 } from "@pfa/protocol";
 import { isSignedBy } from "./auth";
-import type { Env } from "./env";
+import { isTestMode, type Env } from "./env";
+import { readText } from "./http";
 
-const FETCH_LIMIT = 500;
+const badRequest = () => new Response("Bad request", { status: 400 });
+
+interface Row {
+  deviceId: string;
+  protocolVersion: number;
+  bytes: Uint8Array<ArrayBuffer>;
+}
+
+/** Checks one op from an append request. Returns the row to store, or the response to send back. */
+function parseOp(op: unknown, minProtocol: number): Row | Response {
+  if (typeof op !== "object" || op === null) return badRequest();
+  const { deviceId, protocolVersion, ciphertext } = op as Record<string, unknown>;
+  if (
+    typeof deviceId !== "string" ||
+    deviceId.length === 0 ||
+    deviceId.length > MAX_DEVICE_ID_LENGTH
+  )
+    return badRequest();
+  if (typeof ciphertext !== "string") return badRequest();
+  if (
+    !Number.isInteger(protocolVersion) ||
+    (protocolVersion as number) < 0 ||
+    (protocolVersion as number) > MAX_PROTOCOL_VERSION
+  ) {
+    return badRequest();
+  }
+  if ((protocolVersion as number) < minProtocol)
+    return new Response("Update required", { status: 426 });
+  let bytes: Uint8Array<ArrayBuffer>;
+  try {
+    bytes = base64UrlDecode(ciphertext);
+  } catch {
+    return badRequest();
+  }
+  if (bytes.length > MAX_OP_BYTES) return new Response("Op too large", { status: 413 });
+  return { deviceId, protocolVersion: protocolVersion as number, bytes };
+}
 
 /** One Space: an append-only log of opaque encrypted ops, plus who may read and write it. */
 export class SpaceObject extends DurableObject<Env> {
@@ -22,7 +64,8 @@ export class SpaceObject extends DurableObject<Env> {
         `CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)`,
       );
       ctx.storage.sql.exec(`CREATE TABLE IF NOT EXISTS ops (
-        -- No AUTOINCREMENT: it costs a second row write per op. Ops are never deleted in v1, so row ids only grow.
+        -- No AUTOINCREMENT: it costs a second row write per op. Ops are never deleted from the end in v1,
+        -- so row ids only grow. Do not add a feature that deletes the newest ops without revisiting this.
         seq INTEGER PRIMARY KEY,
         device_id TEXT NOT NULL,
         protocol_version INTEGER NOT NULL,
@@ -32,10 +75,9 @@ export class SpaceObject extends DurableObject<Env> {
   }
 
   private meta(key: string): string | undefined {
-    const row = this.ctx.storage.sql
+    return this.ctx.storage.sql
       .exec<{ value: string }>(`SELECT value FROM meta WHERE key = ?`, key)
-      .toArray()[0];
-    return row?.value;
+      .toArray()[0]?.value;
   }
 
   /** Sets up the Space. Returns false if it already exists. */
@@ -53,46 +95,37 @@ export class SpaceObject extends DurableObject<Env> {
     const owner = this.meta("owner");
     if (owner === undefined) return new Response("Unknown space", { status: 404 });
 
-    const body = request.method === "POST" ? await request.text() : "";
+    const body = request.method === "POST" ? await readText(request, MAX_APPEND_BODY_BYTES) : "";
+    if (body instanceof Response) return body;
     if (!(await isSignedBy(request, body, owner)))
       return new Response("Bad signature", { status: 401 });
 
-    const route = new URL(request.url).pathname.split("/")[4];
+    const url = new URL(request.url);
+    const route = url.pathname.split("/")[4];
     if (route === "live" && request.headers.get("upgrade") === "websocket") return this.live();
     if (route === "ops" && request.method === "POST") return this.append(body);
-    if (route === "ops" && request.method === "GET") return this.read(new URL(request.url));
+    if (route === "ops" && request.method === "GET") return this.read(url);
     return new Response("Not found", { status: 404 });
   }
 
   private append(body: string): Response {
-    let parsed: AppendRequest;
+    let parsed: unknown;
     try {
-      parsed = JSON.parse(body) as AppendRequest;
+      parsed = JSON.parse(body);
     } catch {
-      return new Response("Bad request", { status: 400 });
+      return badRequest();
     }
-    if (!Array.isArray(parsed.ops) || parsed.ops.length === 0)
-      return new Response("Bad request", { status: 400 });
+    const ops =
+      typeof parsed === "object" && parsed !== null ? (parsed as { ops?: unknown }).ops : undefined;
+    if (!Array.isArray(ops) || ops.length === 0) return badRequest();
+    if (ops.length > MAX_OPS_PER_APPEND) return new Response("Too many ops", { status: 413 });
 
     const minProtocol = Number(this.meta("min_protocol"));
-    const rows: { deviceId: string; protocolVersion: number; bytes: Uint8Array }[] = [];
-    for (const op of parsed.ops) {
-      if (
-        typeof op.deviceId !== "string" ||
-        typeof op.ciphertext !== "string" ||
-        !Number.isInteger(op.protocolVersion)
-      ) {
-        return new Response("Bad request", { status: 400 });
-      }
-      if (op.protocolVersion < minProtocol) return new Response("Update required", { status: 426 });
-      let bytes: Uint8Array;
-      try {
-        bytes = base64UrlDecode(op.ciphertext);
-      } catch {
-        return new Response("Bad request", { status: 400 });
-      }
-      if (bytes.length > MAX_OP_BYTES) return new Response("Op too large", { status: 413 });
-      rows.push({ deviceId: op.deviceId, protocolVersion: op.protocolVersion, bytes });
+    const rows: Row[] = [];
+    for (const op of ops) {
+      const row = parseOp(op, minProtocol);
+      if (row instanceof Response) return row;
+      rows.push(row);
     }
 
     let rowsWritten = 0;
@@ -111,38 +144,58 @@ export class SpaceObject extends DurableObject<Env> {
     );
 
     const lastSeq = seqs[seqs.length - 1]!;
-    for (const socket of this.ctx.getWebSockets())
-      socket.send(JSON.stringify({ type: "ops", latest: lastSeq }));
+    this.notify(lastSeq);
 
     const response: AppendResponse = { firstSeq: seqs[0]!, lastSeq };
-    const headers: Record<string, string> =
-      this.env.DEBUG_COSTS === "1" ? { "x-debug-rows-written": String(rowsWritten) } : {};
+    const headers: Record<string, string> = isTestMode(this.env)
+      ? { "x-debug-rows-written": String(rowsWritten) }
+      : {};
     return Response.json(response, { headers });
+  }
+
+  /** Tells connected devices there is news. A dead connection must never fail an append that already committed. */
+  private notify(latest: number): void {
+    for (const socket of this.ctx.getWebSockets()) {
+      try {
+        socket.send(JSON.stringify({ type: "ops", latest }));
+      } catch {
+        // The device is gone; it will catch up when it next fetches.
+      }
+    }
   }
 
   private read(url: URL): Response {
     const after = Number(url.searchParams.get("after") ?? "0");
-    if (!Number.isInteger(after) || after < 0) return new Response("Bad request", { status: 400 });
-    const rows = this.ctx.storage.sql
-      .exec<{ seq: number; device_id: string; protocol_version: number; ciphertext: ArrayBuffer }>(
-        `SELECT seq, device_id, protocol_version, ciphertext FROM ops WHERE seq > ? ORDER BY seq LIMIT ?`,
-        after,
-        FETCH_LIMIT,
-      )
-      .toArray();
-    const latest =
-      this.ctx.storage.sql
-        .exec<{ latest: number | null }>(`SELECT MAX(seq) AS latest FROM ops`)
-        .one().latest ?? 0;
-    const response: FetchResponse = {
-      latest,
-      ops: rows.map((row) => ({
+    if (!Number.isSafeInteger(after) || after < 0) return badRequest();
+    const cursor = this.ctx.storage.sql.exec<{
+      seq: number;
+      device_id: string;
+      protocol_version: number;
+      ciphertext: ArrayBuffer;
+    }>(
+      `SELECT seq, device_id, protocol_version, ciphertext FROM ops WHERE seq > ? ORDER BY seq`,
+      after,
+    );
+
+    // Stop once about MAX_FETCH_BYTES of ciphertext is collected (always at least one op); the client
+    // asks again from the last position it received.
+    const ops: StoredOp[] = [];
+    let bytes = 0;
+    for (const row of cursor) {
+      if (ops.length > 0 && bytes + row.ciphertext.byteLength > MAX_FETCH_BYTES) break;
+      bytes += row.ciphertext.byteLength;
+      ops.push({
         seq: row.seq,
         deviceId: row.device_id,
         protocolVersion: row.protocol_version,
         ciphertext: base64UrlEncode(new Uint8Array(row.ciphertext)),
-      })),
-    };
+      });
+    }
+    const latest =
+      this.ctx.storage.sql
+        .exec<{ latest: number | null }>(`SELECT MAX(seq) AS latest FROM ops`)
+        .one().latest ?? 0;
+    const response: FetchResponse = { latest, ops };
     return Response.json(response);
   }
 
@@ -153,7 +206,15 @@ export class SpaceObject extends DurableObject<Env> {
     return new Response(null, { status: 101, webSocket: client });
   }
 
-  webSocketClose(socket: WebSocket, code: number): void {
-    socket.close(code);
+  webSocketClose(socket: WebSocket): void {
+    try {
+      socket.close(1000);
+    } catch {
+      // Already closed.
+    }
+  }
+
+  webSocketError(socket: WebSocket): void {
+    this.webSocketClose(socket);
   }
 }

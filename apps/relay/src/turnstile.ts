@@ -1,16 +1,24 @@
-import type { Env } from "./env";
+import { isTestMode, type Env } from "./env";
 
-const DEFAULT_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
+const VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
+const TIMEOUT_MS = 5_000;
 
-/** Asks Cloudflare whether a Turnstile token is genuine. Anything other than a clear yes is a no. */
+export type TurnstileResult = "valid" | "invalid" | "unavailable";
+
+/**
+ * Asks Cloudflare whether a Turnstile token is genuine. A clear "no" is `invalid`; a failure to get any
+ * clear answer is `unavailable`, so clients can retry instead of being told their token is bad.
+ * Neither lets a Space be created.
+ */
 export async function verifyTurnstile(
   token: string,
   env: Env,
   remoteIp: string | null,
-): Promise<boolean> {
-  if (token === "") return false;
+): Promise<TurnstileResult> {
+  if (token === "") return "invalid";
+  const url = isTestMode(env) && env.TURNSTILE_VERIFY_URL ? env.TURNSTILE_VERIFY_URL : VERIFY_URL;
   try {
-    const response = await fetch(env.TURNSTILE_VERIFY_URL ?? DEFAULT_VERIFY_URL, {
+    const response = await fetch(url, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -18,10 +26,12 @@ export async function verifyTurnstile(
         response: token,
         ...(remoteIp ? { remoteip: remoteIp } : {}),
       }),
+      signal: AbortSignal.timeout(TIMEOUT_MS),
     });
-    const result = (await response.json()) as { success?: boolean };
-    return result.success === true;
+    if (!response.ok) return "unavailable";
+    const result = (await response.json()) as { success?: unknown };
+    return result.success === true ? "valid" : "invalid";
   } catch {
-    return false;
+    return "unavailable";
   }
 }

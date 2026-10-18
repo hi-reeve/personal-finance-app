@@ -1,6 +1,23 @@
 /** Wire format shared by every client and the relay. The relay sees only what is in these types. */
 
+/**
+ * Wire protocol version. It changes only on a breaking wire change, never with an app release, so an
+ * old app keeps syncing until the relay's minimum version passes it.
+ */
 export const PROTOCOL_VERSION = 1;
+
+/** Space ids are derived from the secret, so they are long and unguessable; this is just the allowed shape. */
+export const SPACE_ID_PATTERN = /^[A-Za-z0-9_-]{8,64}$/;
+
+export const MAX_DEVICE_ID_LENGTH = 64;
+export const MAX_PROTOCOL_VERSION = 65_535;
+/** Most ops one append may carry. */
+export const MAX_OPS_PER_APPEND = 100;
+/** Largest request bodies the relay will read, so a hostile client cannot make it buffer without limit. */
+export const MAX_APPEND_BODY_BYTES = 1024 * 1024;
+export const MAX_CREATE_BODY_BYTES = 4 * 1024;
+/** One fetch returns at most this much ciphertext; the client asks again from the last position it got. */
+export const MAX_FETCH_BYTES = 1024 * 1024;
 
 /** Requests older or newer than this are refused, which limits replay of a captured request. */
 export const SIGNATURE_WINDOW_MS = 5 * 60 * 1000;

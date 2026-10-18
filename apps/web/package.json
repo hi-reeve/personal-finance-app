@@ -11,6 +11,7 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@ark-ui/react": "^5.39.3",
     "@pfa/core": "workspace:*",
     "@pfa/protocol": "workspace:*",
     "@pfa/tokens": "workspace:*",

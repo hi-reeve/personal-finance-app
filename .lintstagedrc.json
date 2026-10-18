@@ -1,0 +1,4 @@
+{
+  "*.{ts,tsx,js,jsx,json,md,yml,yaml}": "vp fmt --write",
+  "*.{ts,tsx,js,jsx}": "vp lint"
+}

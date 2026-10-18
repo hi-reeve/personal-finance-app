@@ -3,3 +3,11 @@ docs/samples-private/
 
 # macOS
 .DS_Store
+
+# Dependencies and build output
+node_modules/
+dist/
+.turbo/
+*.log
+.env
+.dev.vars

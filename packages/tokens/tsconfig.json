@@ -1,0 +1,4 @@
+{
+  "extends": "@pfa/config/tsconfig.platform-free.json",
+  "include": ["src"]
+}

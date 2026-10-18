@@ -1,5 +1,8 @@
 import type { ReactNode } from "react";
 import { HeadContent, Outlet, Scripts, createRootRoute } from "@tanstack/react-router";
+import { themeCss } from "@pfa/tokens";
+import { APPEARANCE_INIT_SCRIPT, AppearanceProvider } from "../components/appearance";
+import { HideAmountsProvider } from "../components/hide-amounts";
 import appCss from "../styles.css?url";
 
 export const Route = createRootRoute({
@@ -10,10 +13,16 @@ export const Route = createRootRoute({
       { title: "Personal finance" },
     ],
     links: [{ rel: "stylesheet", href: appCss }],
+    styles: [{ children: themeCss() }],
+    scripts: [{ children: APPEARANCE_INIT_SCRIPT }],
   }),
   component: () => (
     <Shell>
-      <Outlet />
+      <AppearanceProvider>
+        <HideAmountsProvider>
+          <Outlet />
+        </HideAmountsProvider>
+      </AppearanceProvider>
     </Shell>
   ),
 });

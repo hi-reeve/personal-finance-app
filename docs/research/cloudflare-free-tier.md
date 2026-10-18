@@ -4,14 +4,14 @@ Researched 2026-10-14 from Cloudflare developer docs (Workers limits, D1 limits 
 
 ## Limits that matter (Free plan)
 
-| Service | Limit |
-| --- | --- |
-| Workers | 100,000 requests/day (resets 00:00 UTC); 10 ms CPU per request; 50 subrequests; 128 MB memory; 100 Workers/account |
-| D1 | 5M rows read/day; 100,000 rows written/day; 500 MB per database; 5 GB per account; 10 databases; 2 MB max row/blob |
-| R2 (Standard) | 10 GB-month storage; 1M Class A ops/month (writes, lists); 10M Class B ops/month (reads); egress free |
-| Durable Objects | SQLite-backed only on Free; 100,000 requests/day; 13,000 GB-s/day; 5M rows read/day; 100,000 rows written/day; 5 GB total |
-| DO WebSockets | connection counts as 1 request; incoming messages bill at 20 messages = 1 request; outgoing free; hibernation avoids duration charges |
-| Turnstile | Free, unlimited verifications, 20 widgets, 10 hostnames/widget |
+| Service         | Limit                                                                                                                                 |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Workers         | 100,000 requests/day (resets 00:00 UTC); 10 ms CPU per request; 50 subrequests; 128 MB memory; 100 Workers/account                    |
+| D1              | 5M rows read/day; 100,000 rows written/day; 500 MB per database; 5 GB per account; 10 databases; 2 MB max row/blob                    |
+| R2 (Standard)   | 10 GB-month storage; 1M Class A ops/month (writes, lists); 10M Class B ops/month (reads); egress free                                 |
+| Durable Objects | SQLite-backed only on Free; 100,000 requests/day; 13,000 GB-s/day; 5M rows read/day; 100,000 rows written/day; 5 GB total             |
+| DO WebSockets   | connection counts as 1 request; incoming messages bill at 20 messages = 1 request; outgoing free; hibernation avoids duration charges |
+| Turnstile       | Free, unlimited verifications, 20 widgets, 10 hostnames/widget                                                                        |
 
 Over a daily limit, operations fail until reset (Workers: error 1027; D1: queries blocked). There is no surprise bill on Free; the cost is downtime.
 

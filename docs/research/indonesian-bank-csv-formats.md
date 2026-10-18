@@ -4,18 +4,19 @@ Researched 2026-10-14. **Thin evidence.** No bank publishes a format spec; what 
 
 ## Per bank
 
-| Source | Format | Confidence | Notes |
-| --- | --- | --- | --- |
-| BCA KlikBCA Individual ("Personal") | CSV | Medium (from go-bankset docstrings, partial samples) | See layout below |
-| BCA business/corporate ("Bisnis") | CSV | Medium | See layout below |
-| Bank Jago | PDF e-statement; per-pocket history download | Low-medium (help page via search snippet: PDF only; page itself returned 403 when fetched) | No CSV found |
-| Mandiri (Livin', Kopra) | Kopra: statement report with user-selected columns, formats not listed; Livin': no CSV/Excel export found | Low | Kopra is corporate |
-| BNI, BRI | Nothing found; third-party parser lists them as planned (PDF e-statement) | Very low | |
-| GoPay, OVO | No export format found | Very low | |
+| Source                              | Format                                                                                                    | Confidence                                                                                 | Notes              |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | ------------------ |
+| BCA KlikBCA Individual ("Personal") | CSV                                                                                                       | Medium (from go-bankset docstrings, partial samples)                                       | See layout below   |
+| BCA business/corporate ("Bisnis")   | CSV                                                                                                       | Medium                                                                                     | See layout below   |
+| Bank Jago                           | PDF e-statement; per-pocket history download                                                              | Low-medium (help page via search snippet: PDF only; page itself returned 403 when fetched) | No CSV found       |
+| Mandiri (Livin', Kopra)             | Kopra: statement report with user-selected columns, formats not listed; Livin': no CSV/Excel export found | Low                                                                                        | Kopra is corporate |
+| BNI, BRI                            | Nothing found; third-party parser lists them as planned (PDF e-statement)                                 | Very low                                                                                   |                    |
+| GoPay, OVO                          | No export format found                                                                                    | Very low                                                                                   |                    |
 
 ## BCA layouts (from go-bankset)
 
 **Personal (KlikBCA Individual):** comma-delimited, values unquoted.
+
 - Header rows as `key,=,value`: `Account No.` (value prefixed with an apostrophe), `Name`, `Currency` (e.g. `IDR`); blank line.
 - Columns: `Date,Description,Branch,Amount,,Balance`; the unnamed column holds the `CR`/`DB` marker.
 - Date: apostrophe-prefixed `DD/MM/YYYY`. Amount and balance: no thousands separators, dot decimal, two places (`108400.00`).
@@ -23,6 +24,7 @@ Researched 2026-10-14. **Thin evidence.** No bank publishes a format spec; what 
 - Only `CR` appears in the samples; the debit marker is undocumented.
 
 **Bisnis (corporate):** comma-delimited, every value double-quoted.
+
 - Header lines: `"No. rekening : ..."`, name, `"Periode : ..."`, `"Kode Mata Uang : Rp"`.
 - Columns: `"Tanggal Transaksi","Keterangan","Cabang","Jumlah","Saldo"`.
 - Date `DD/MM/YYYY`. Amount: comma thousands, dot decimal, `CR` suffix (`3,528,964.00 CR`). Balance has no marker.

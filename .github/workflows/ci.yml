@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Branch name
+        if: github.event_name == 'pull_request'
+        run: |
+          case "$GITHUB_HEAD_REF" in
+            feat-*|fix-*|refactor-*|chore-*|docs-*|test-*|perf-*|build-*|ci-*|style-*|revert-*) ;;
+            *) echo "Branch '$GITHUB_HEAD_REF' must start with a conventional type, e.g. feat-xxx"; exit 1 ;;
+          esac
+      - name: Commit messages
+        if: github.event_name == 'pull_request'
+        run: pnpm exec commitlint --from "${{ github.event.pull_request.base.sha }}" --to "${{ github.event.pull_request.head.sha }}"
+      - name: PR title
+        if: github.event_name == 'pull_request'
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: echo "$PR_TITLE" | pnpm exec commitlint
+      - name: Changeset present
+        if: github.event_name == 'pull_request'
+        run: pnpm exec changeset status --since=origin/${{ github.base_ref }}
+
+      - run: pnpm lint
+      - run: pnpm fmt:check
+      - run: pnpm typecheck
+      - run: pnpm test

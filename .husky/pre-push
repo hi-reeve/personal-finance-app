@@ -1,0 +1,7 @@
+branch=$(git rev-parse --abbrev-ref HEAD)
+case "$branch" in
+  main) exit 0 ;;
+  feat-*|fix-*|refactor-*|chore-*|docs-*|test-*|perf-*|build-*|ci-*|style-*|revert-*) ;;
+  *) echo "Branch name '$branch' must start with a conventional type, e.g. feat-xxx"; exit 1 ;;
+esac
+pnpm typecheck && pnpm test

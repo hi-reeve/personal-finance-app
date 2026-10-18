@@ -7,11 +7,13 @@
     "dev": "vp dev",
     "build": "vp build && node scripts/precache.ts dist/client",
     "preview": "vp preview",
-    "typecheck": "tsc -p tsconfig.json",
-    "test:e2e": "playwright test"
+    "typecheck": "pnpm paraglide && tsc -p tsconfig.json",
+    "test:e2e": "playwright test",
+    "paraglide": "paraglide-js compile --project ./project.inlang --outdir ./src/paraglide --strategy localStorage preferredLanguage baseLocale"
   },
   "dependencies": {
     "@ark-ui/react": "^5.39.3",
+    "@inlang/paraglide-js": "^2.29.0",
     "@pfa/core": "workspace:*",
     "@pfa/protocol": "workspace:*",
     "@pfa/tokens": "workspace:*",
@@ -22,6 +24,7 @@
     "tailwindcss": "^4.3.3"
   },
   "devDependencies": {
+    "@inlang/plugin-message-format": "^4.5.4",
     "@pfa/config": "workspace:*",
     "@playwright/test": "^1.64.1",
     "@tailwindcss/vite": "^4.3.3",

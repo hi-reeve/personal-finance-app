@@ -45,6 +45,22 @@ describe("buildPrecache", () => {
     expect(buildPrecache(dir).files).not.toContain("/sw.js");
   });
 
+  it("leaves out hosting configuration files, which are not part of the app", () => {
+    const dir = site({
+      ...base,
+      _headers: "/sw.js\n  Cache-Control: no-cache",
+      _redirects: "/* /_shell.html 200",
+    });
+    expect(buildPrecache(dir).files).not.toContain("/_headers");
+    expect(buildPrecache(dir).files).not.toContain("/_redirects");
+  });
+
+  it("writes content with special characters into the worker unchanged", () => {
+    const dir = site({ ...base, "assets/a$&b.js": "x" });
+    buildPrecache(dir);
+    expect(readFileSync(join(dir, "sw.js"), "utf8")).toContain('"/assets/a$&b.js"');
+  });
+
   it("gives the same version for the same content and a new one when anything changes", () => {
     const a = buildPrecache(site(base)).version;
     const b = buildPrecache(site(base)).version;

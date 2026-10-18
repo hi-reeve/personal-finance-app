@@ -1,0 +1,2 @@
+# Every path that is not a file is a client-side route: serve the app shell.
+/* /_shell.html 200

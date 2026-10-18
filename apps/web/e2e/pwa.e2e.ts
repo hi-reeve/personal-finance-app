@@ -7,7 +7,9 @@ import { buildPrecache } from "../scripts/precache";
 const BUILT = resolve("dist/client");
 
 async function serve(page: Page, dir: string) {
-  await page.request.post(`/__site?dir=${encodeURIComponent(dir)}`);
+  await page.request.post(`/__site?dir=${encodeURIComponent(dir)}`, {
+    headers: { "x-pfa-test": "1" },
+  });
 }
 
 /** A copy of the built site that looks like the next release: a different shell and service worker. */
@@ -108,8 +110,23 @@ test("is installable: a manifest with icons the browser can load", async ({ page
 test("the test server refuses to serve folders outside the build and temp dirs", async ({
   page,
 }) => {
-  const response = await page.request.post(`/__site?dir=${encodeURIComponent("/etc")}`);
+  const response = await page.request.post(`/__site?dir=${encodeURIComponent("/etc")}`, {
+    headers: { "x-pfa-test": "1" },
+  });
   expect(response.status()).toBe(403);
   const traversal = await page.request.get("/../../../../etc/hosts");
   expect(await traversal.text()).not.toContain("localhost");
+});
+
+test("the test server only accepts site swaps from the tests themselves", async ({ page }) => {
+  const withoutHeader = await page.request.post(`/__site?dir=${encodeURIComponent(BUILT)}`);
+  expect(withoutHeader.status()).toBe(403);
+});
+
+test("a missing asset is a 404, not the app shell, as on real hosting", async ({ page }) => {
+  const response = await page.request.get("/assets/does-not-exist.js");
+  expect(response.status()).toBe(404);
+  const route = await page.request.get("/some/client/route");
+  expect(route.status()).toBe(200);
+  expect(await route.text()).toContain("<html");
 });

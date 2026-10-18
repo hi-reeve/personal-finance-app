@@ -13,6 +13,11 @@ self.addEventListener("install", (event) => {
         PRECACHE.map(async (url) => {
           const response = await fetch(new Request(url, { cache: "reload" }));
           if (!response.ok) throw new Error("Could not precache " + url + ": " + response.status);
+          // A host that answers a missing file with the app shell must not get that shell cached under the file's name.
+          const type = response.headers.get("content-type") || "";
+          if (type.startsWith("text/html") && !url.endsWith(".html")) {
+            throw new Error("Could not precache " + url + ": got HTML");
+          }
           await cache.put(url, response);
         }),
       ),

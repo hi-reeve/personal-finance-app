@@ -5,6 +5,8 @@ import { fileURLToPath } from "node:url";
 
 const TEMPLATE = join(dirname(fileURLToPath(import.meta.url)), "sw.template.js");
 const SERVICE_WORKER = "sw.js";
+/** Files that are for the host, not the app: never precached. */
+const NOT_PRECACHED = new Set(["/" + SERVICE_WORKER, "/_headers", "/_redirects"]);
 
 function listFiles(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
@@ -19,7 +21,7 @@ function listFiles(dir: string): string[] {
 export function buildPrecache(siteDir: string): { version: string; files: string[] } {
   const paths = listFiles(siteDir)
     .map((file) => ({ file, url: "/" + relative(siteDir, file).split(sep).join("/") }))
-    .filter(({ url }) => url !== "/" + SERVICE_WORKER)
+    .filter(({ url }) => !NOT_PRECACHED.has(url))
     .sort((a, b) => (a.url < b.url ? -1 : 1));
 
   const hash = createHash("sha256");
@@ -30,8 +32,8 @@ export function buildPrecache(siteDir: string): { version: string; files: string
   const files = paths.map(({ url }) => url);
 
   const sw = readFileSync(TEMPLATE, "utf8")
-    .replace("__VERSION__", JSON.stringify(version))
-    .replace("__PRECACHE__", JSON.stringify(files, null, 2));
+    .replace("__VERSION__", () => JSON.stringify(version))
+    .replace("__PRECACHE__", () => JSON.stringify(files, null, 2));
   writeFileSync(join(siteDir, SERVICE_WORKER), sw);
   return { version, files };
 }

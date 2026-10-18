@@ -17,6 +17,10 @@ class FakeWorker extends EventTarget {
 class FakeRegistration extends EventTarget {
   installing: FakeWorker | null = null;
   waiting: FakeWorker | null = null;
+  updates = 0;
+  async update() {
+    this.updates += 1;
+  }
   startUpdate(worker: FakeWorker) {
     this.installing = worker;
     this.dispatchEvent(new Event("updatefound"));
@@ -156,5 +160,67 @@ describe("registerServiceWorker", () => {
     });
     container.takeControl();
     expect(reload).not.toHaveBeenCalled();
+  });
+
+  it("waits for a still-installing update before telling it to take over", async () => {
+    const container = new FakeContainer(true);
+    let apply: () => void = () => {};
+    await registerServiceWorker({
+      container: asContainer(container),
+      onUpdateReady: (fn) => {
+        apply = fn;
+      },
+      reload: vi.fn(),
+    });
+    const worker = new FakeWorker();
+    container.registration.startUpdate(worker);
+    worker.setState("installed");
+
+    // The user acts, but the browser reports the worker as installing again (and not yet waiting).
+    container.registration.installing = worker;
+    worker.state = "installing";
+    apply();
+    expect(worker.posted).toEqual([]);
+    worker.setState("installed");
+    expect(worker.posted).toEqual([{ type: "SKIP_WAITING" }]);
+  });
+
+  it("lets another open tab know when a new version took over, and reloads only when asked", async () => {
+    const container = new FakeContainer(true);
+    const reload = vi.fn();
+    let apply: () => void = () => {};
+    const onUpdateReady = vi.fn((fn: () => void) => {
+      apply = fn;
+    });
+    await registerServiceWorker({ container: asContainer(container), onUpdateReady, reload });
+
+    container.takeControl(); // another tab applied the update
+    expect(onUpdateReady).toHaveBeenCalledTimes(1);
+    expect(reload).not.toHaveBeenCalled();
+    apply();
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not announce an update when the very first install claims the page", async () => {
+    const container = new FakeContainer(false);
+    const onUpdateReady = vi.fn();
+    await registerServiceWorker({
+      container: asContainer(container),
+      onUpdateReady,
+      reload: vi.fn(),
+    });
+    container.takeControl();
+    expect(onUpdateReady).not.toHaveBeenCalled();
+  });
+
+  it("can be asked to check for a newer version", async () => {
+    const container = new FakeContainer(true);
+    const handle = await registerServiceWorker({
+      container: asContainer(container),
+      onUpdateReady: vi.fn(),
+      reload: vi.fn(),
+    });
+    await handle?.checkForUpdate();
+    expect(container.registration.updates).toBe(1);
   });
 });

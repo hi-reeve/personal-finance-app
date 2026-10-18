@@ -19,12 +19,14 @@ Not part of the triage state machine. Apply them when classifying an issue; skil
 **Type**: `type:bug`, `type:feature` (features and enhancements), `type:documentation`, `type:ui-ux`, `type:chore`
 
 **Priority**
+
 - `priority:p0`: drop everything
 - `priority:p1`: high
 - `priority:p2`: medium
 - `priority:p3`: low
 
 **Severity** (impact, mostly for bugs)
+
 - `severity:blocker`: stops release or all work, no way around
 - `severity:critical`: data loss, wrong money numbers, security
 - `severity:major`: core flow broken, no workaround

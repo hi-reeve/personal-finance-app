@@ -4,12 +4,12 @@ Researched 2026-10-14 from SQLite WASM, MDN, WebKit, Tauri, Electron and Capacit
 
 ## Browser/PWA database
 
-| Option | Needs | Notes |
-| --- | --- | --- |
-| SQLite WASM + **OPFS VFS** | Worker thread, `SharedArrayBuffer` so COOP/COEP headers; Safari 17+ (earlier Safari broken by a WebKit bug) | A second tab opening the same DB hits locking errors; handle `SQLITE_BUSY` |
-| SQLite WASM + **OPFS SAHPool VFS** | Worker; works on all major browsers since March 2023; **no COOP/COEP** | Best OPFS performance; no concurrent connections to the same DB across contexts; **wipes storage if initialization fails** unless `preserveOnInitFailure` (3.54+) is set |
-| SQLite WASM + kvvfs (localStorage) | main thread only | ~5 MB limit; not viable |
-| IndexedDB | none | Not researched here; Evolu's browser stack uses SQLite WASM, not raw IndexedDB |
+| Option                             | Needs                                                                                                       | Notes                                                                                                                                                                    |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| SQLite WASM + **OPFS VFS**         | Worker thread, `SharedArrayBuffer` so COOP/COEP headers; Safari 17+ (earlier Safari broken by a WebKit bug) | A second tab opening the same DB hits locking errors; handle `SQLITE_BUSY`                                                                                               |
+| SQLite WASM + **OPFS SAHPool VFS** | Worker; works on all major browsers since March 2023; **no COOP/COEP**                                      | Best OPFS performance; no concurrent connections to the same DB across contexts; **wipes storage if initialization fails** unless `preserveOnInitFailure` (3.54+) is set |
+| SQLite WASM + kvvfs (localStorage) | main thread only                                                                                            | ~5 MB limit; not viable                                                                                                                                                  |
+| IndexedDB                          | none                                                                                                        | Not researched here; Evolu's browser stack uses SQLite WASM, not raw IndexedDB                                                                                           |
 
 Caveats from the SQLite docs: external causes (virus scanners, cleaners, permission changes, browser cleanup) can remove OPFS data; quota errors surface as generic I/O errors; incognito may have low or no persistence; WAL mode forces exclusive locking.
 
@@ -29,14 +29,14 @@ Caveats from the SQLite docs: external causes (virus scanners, cleaners, permiss
 
 ## Desktop wrapper
 
-| | Tauri 2 | Electron |
-| --- | --- | --- |
-| Engine | System webview: WebView2 (Chromium) on Windows, WKWebView on macOS, WebKitGTK on Linux; Android system WebView; WKWebView on iOS | Bundles Chromium and Node.js |
-| Size | Minimal app claimed under 600 KB | Not stated; known to be large because it ships a browser |
-| Consistency | Engine and version vary by OS and distro; unsupported macOS versions get no WebKit updates; Linux table incomplete | Same engine everywhere |
-| Backend | Rust, with `invoke` from JS | Node.js |
-| Mobile | Docs say it targets desktop and mobile | Desktop only |
-| Security | Rust base, audits for major/minor releases | Page links a security checklist, not summarized |
+|             | Tauri 2                                                                                                                          | Electron                                                 |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| Engine      | System webview: WebView2 (Chromium) on Windows, WKWebView on macOS, WebKitGTK on Linux; Android system WebView; WKWebView on iOS | Bundles Chromium and Node.js                             |
+| Size        | Minimal app claimed under 600 KB                                                                                                 | Not stated; known to be large because it ships a browser |
+| Consistency | Engine and version vary by OS and distro; unsupported macOS versions get no WebKit updates; Linux table incomplete               | Same engine everywhere                                   |
+| Backend     | Rust, with `invoke` from JS                                                                                                      | Node.js                                                  |
+| Mobile      | Docs say it targets desktop and mobile                                                                                           | Desktop only                                             |
+| Security    | Rust base, audits for major/minor releases                                                                                       | Page links a security checklist, not summarized          |
 
 - Unverified: whether SQLite WASM OPFS (both VFSes) works in WKWebView and WebKitGTK under Tauri, and how it behaves on older macOS. On desktop, a native SQLite via Rust or Node avoids the question but splits the storage layer from the web build.
 - Evolu's privacy docs mention SQLCipher on web and Electron, which favors Electron if Evolu is adopted.

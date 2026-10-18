@@ -1,4 +1,4 @@
 {
-  "*.{ts,tsx,js,jsx,json,md,yml,yaml}": "vp fmt --write",
+  "*.{ts,tsx,js,jsx,json,md,yml,yaml}": "vp fmt --write --no-error-on-unmatched-pattern",
   "*.{ts,tsx,js,jsx}": "vp lint -c .oxlintrc.json"
 }

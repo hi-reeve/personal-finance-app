@@ -2,6 +2,9 @@ import { useEffect, type ReactNode } from "react";
 import { HeadContent, Outlet, Scripts, createRootRoute } from "@tanstack/react-router";
 import { themeCss } from "@pfa/tokens";
 import { APPEARANCE_INIT_SCRIPT, AppearanceProvider } from "../components/appearance";
+import { AppGate } from "../app/app-gate";
+import { AppProvider } from "../app/app-provider";
+import { LocalOnlyBanner } from "../app/local-only-banner";
 import { AppShell } from "../components/app-shell";
 import { HideAmountsProvider } from "../components/hide-amounts";
 import { LocaleProvider } from "../components/locale";
@@ -49,9 +52,14 @@ function Root() {
             onApply={pwa.applyUpdate}
             onInstall={pwa.install}
           />
-          <AppShell>
-            <Outlet />
-          </AppShell>
+          <AppProvider>
+            <AppGate>
+              <AppShell>
+                <LocalOnlyBanner />
+                <Outlet />
+              </AppShell>
+            </AppGate>
+          </AppProvider>
         </HideAmountsProvider>
       </LocaleProvider>
     </AppearanceProvider>

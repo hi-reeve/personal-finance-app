@@ -20,3 +20,12 @@ export function assertAmount(value: number): void {
   if (!Number.isSafeInteger(value))
     throw new Error(`Invalid amount ${value}: expected whole minor units`);
 }
+
+export const ACCOUNT_KINDS = ["cash", "bank", "ewallet", "credit-card", "other"] as const;
+export type AccountKind = (typeof ACCOUNT_KINDS)[number];
+
+export function assertAccountKind(value: string): void {
+  if (!ACCOUNT_KINDS.includes(value as AccountKind)) {
+    throw new Error(`Invalid Account kind "${value}": expected one of ${ACCOUNT_KINDS.join(", ")}`);
+  }
+}

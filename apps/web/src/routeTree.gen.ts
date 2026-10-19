@@ -10,33 +10,154 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AccountsRouteImport } from './routes/accounts'
+import { Route as ActivityRouteImport } from './routes/activity'
+import { Route as BudgetsRouteImport } from './routes/budgets'
+import { Route as DebtsRouteImport } from './routes/debts'
+import { Route as MoreRouteImport } from './routes/more'
+import { Route as RecurringRouteImport } from './routes/recurring'
+import { Route as ReportsRouteImport } from './routes/reports'
+import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as SplitRouteImport } from './routes/split'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AccountsRoute = AccountsRouteImport.update({
+  id: '/accounts',
+  path: '/accounts',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ActivityRoute = ActivityRouteImport.update({
+  id: '/activity',
+  path: '/activity',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BudgetsRoute = BudgetsRouteImport.update({
+  id: '/budgets',
+  path: '/budgets',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DebtsRoute = DebtsRouteImport.update({
+  id: '/debts',
+  path: '/debts',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MoreRoute = MoreRouteImport.update({
+  id: '/more',
+  path: '/more',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RecurringRoute = RecurringRouteImport.update({
+  id: '/recurring',
+  path: '/recurring',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReportsRoute = ReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SplitRoute = SplitRouteImport.update({
+  id: '/split',
+  path: '/split',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/accounts': typeof AccountsRoute
+  '/activity': typeof ActivityRoute
+  '/budgets': typeof BudgetsRoute
+  '/debts': typeof DebtsRoute
+  '/more': typeof MoreRoute
+  '/recurring': typeof RecurringRoute
+  '/reports': typeof ReportsRoute
+  '/settings': typeof SettingsRoute
+  '/split': typeof SplitRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/accounts': typeof AccountsRoute
+  '/activity': typeof ActivityRoute
+  '/budgets': typeof BudgetsRoute
+  '/debts': typeof DebtsRoute
+  '/more': typeof MoreRoute
+  '/recurring': typeof RecurringRoute
+  '/reports': typeof ReportsRoute
+  '/settings': typeof SettingsRoute
+  '/split': typeof SplitRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/accounts': typeof AccountsRoute
+  '/activity': typeof ActivityRoute
+  '/budgets': typeof BudgetsRoute
+  '/debts': typeof DebtsRoute
+  '/more': typeof MoreRoute
+  '/recurring': typeof RecurringRoute
+  '/reports': typeof ReportsRoute
+  '/settings': typeof SettingsRoute
+  '/split': typeof SplitRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/accounts'
+    | '/activity'
+    | '/budgets'
+    | '/debts'
+    | '/more'
+    | '/recurring'
+    | '/reports'
+    | '/settings'
+    | '/split'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/accounts'
+    | '/activity'
+    | '/budgets'
+    | '/debts'
+    | '/more'
+    | '/recurring'
+    | '/reports'
+    | '/settings'
+    | '/split'
+  id:
+    | '__root__'
+    | '/'
+    | '/accounts'
+    | '/activity'
+    | '/budgets'
+    | '/debts'
+    | '/more'
+    | '/recurring'
+    | '/reports'
+    | '/settings'
+    | '/split'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AccountsRoute: typeof AccountsRoute
+  ActivityRoute: typeof ActivityRoute
+  BudgetsRoute: typeof BudgetsRoute
+  DebtsRoute: typeof DebtsRoute
+  MoreRoute: typeof MoreRoute
+  RecurringRoute: typeof RecurringRoute
+  ReportsRoute: typeof ReportsRoute
+  SettingsRoute: typeof SettingsRoute
+  SplitRoute: typeof SplitRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +169,83 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/accounts': {
+      id: '/accounts'
+      path: '/accounts'
+      fullPath: '/accounts'
+      preLoaderRoute: typeof AccountsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/activity': {
+      id: '/activity'
+      path: '/activity'
+      fullPath: '/activity'
+      preLoaderRoute: typeof ActivityRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/budgets': {
+      id: '/budgets'
+      path: '/budgets'
+      fullPath: '/budgets'
+      preLoaderRoute: typeof BudgetsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/debts': {
+      id: '/debts'
+      path: '/debts'
+      fullPath: '/debts'
+      preLoaderRoute: typeof DebtsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/more': {
+      id: '/more'
+      path: '/more'
+      fullPath: '/more'
+      preLoaderRoute: typeof MoreRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/recurring': {
+      id: '/recurring'
+      path: '/recurring'
+      fullPath: '/recurring'
+      preLoaderRoute: typeof RecurringRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reports': {
+      id: '/reports'
+      path: '/reports'
+      fullPath: '/reports'
+      preLoaderRoute: typeof ReportsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/split': {
+      id: '/split'
+      path: '/split'
+      fullPath: '/split'
+      preLoaderRoute: typeof SplitRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AccountsRoute: AccountsRoute,
+  ActivityRoute: ActivityRoute,
+  BudgetsRoute: BudgetsRoute,
+  DebtsRoute: DebtsRoute,
+  MoreRoute: MoreRoute,
+  RecurringRoute: RecurringRoute,
+  ReportsRoute: ReportsRoute,
+  SettingsRoute: SettingsRoute,
+  SplitRoute: SplitRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -6,18 +6,12 @@ import {
   type NewAccount,
   type Settings,
 } from "@pfa/core";
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-} from "react";
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { openWebStore } from "../storage/web-store";
 
 const DEVICE_KEY = "pfa.device-id";
+
+let fallbackId: string | undefined;
 
 function deviceId(): string {
   try {
@@ -27,7 +21,8 @@ function deviceId(): string {
     localStorage.setItem(DEVICE_KEY, created);
     return created;
   } catch {
-    return crypto.randomUUID();
+    // Storage is blocked: keep one id for this page, so its ops at least order consistently.
+    return (fallbackId ??= crypto.randomUUID());
   }
 }
 
@@ -96,8 +91,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   }, [completeSetup]);
 
-  const value = useMemo(() => state, [state]);
-  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
+  return <AppContext.Provider value={state}>{children}</AppContext.Provider>;
 }
 
 export function useApp(): AppState {

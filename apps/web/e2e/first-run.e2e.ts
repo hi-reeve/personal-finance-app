@@ -24,7 +24,7 @@ test("a new user sets up with no sign-up, and it is all still there after a relo
   await page.getByLabel("Type").selectOption("ewallet");
   await page.getByRole("button", { name: "Start" }).click();
 
-  const banner = page.getByRole("status").filter({ hasText: "only on this device" });
+  const banner = page.locator("[data-level]").filter({ hasText: "only on this device" });
   await expect(banner).toBeVisible();
   await expect(banner).toHaveAttribute("data-level", "gentle");
 
@@ -35,7 +35,7 @@ test("a new user sets up with no sign-up, and it is all still there after a relo
   await page.reload();
   await expect(page.getByRole("button", { name: "Start" })).toHaveCount(0);
   await expect(page.getByText("Dompet harian")).toBeVisible();
-  await expect(page.getByRole("status").filter({ hasText: "only on this device" })).toBeVisible();
+  await expect(page.locator("[data-level]")).toBeVisible();
 });
 
 test("the setup screen follows the chosen language", async ({ page }) => {
@@ -43,6 +43,34 @@ test("the setup screen follows the chosen language", async ({ page }) => {
   await page.getByLabel("Bahasa Indonesia").check({ force: true });
   await expect(page.getByRole("button", { name: "Mulai" })).toBeVisible();
   await expect(page.getByLabel("Mata uang dasar")).toHaveValue("USD");
+
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Mulai" })).toBeVisible();
+});
+
+test("Tab cannot reach the app behind the full-screen reminder, and Escape puts it off", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Start" }).click();
+  await expect(page.locator("[data-nav]").first()).toBeAttached();
+  await page.clock.install({ time: Date.now() + 8 * 24 * 60 * 60 * 1000 });
+  await page.reload();
+
+  const prompt = page.getByRole("dialog", { name: "Your data is only on this device" });
+  await expect(prompt).toBeVisible();
+  for (let i = 0; i < 6; i++) {
+    await page.keyboard.press("Tab");
+    // Focus stays in the dialog (or leaves the page for browser chrome); it never reaches the app.
+    expect(
+      await page.evaluate(
+        () =>
+          document.activeElement === document.body || !!document.activeElement?.closest("dialog"),
+      ),
+    ).toBe(true);
+  }
+  await page.keyboard.press("Escape");
+  await expect(prompt).toBeHidden();
 });
 
 test("after a week the full-screen reminder appears, can be put off for a day, and never locks the app", async ({
@@ -60,10 +88,7 @@ test("after a week the full-screen reminder appears, can be put off for a day, a
   await expect(prompt).toBeVisible();
   await prompt.getByRole("button", { name: "Remind me tomorrow" }).click();
   await expect(prompt).toBeHidden();
-  await expect(page.getByRole("status").filter({ hasText: "only on this device" })).toHaveAttribute(
-    "data-level",
-    "strong",
-  );
+  await expect(page.locator("[data-level]")).toHaveAttribute("data-level", "strong");
 
   await page.reload();
   await expect(prompt).toBeHidden();

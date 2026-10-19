@@ -53,7 +53,6 @@
   "welcome_currency": "Mata uang dasar",
   "welcome_account_name": "Nama akun",
   "welcome_account_kind": "Jenis",
-  "welcome_name_required": "Beri nama akun.",
   "welcome_start": "Mulai",
   "welcome_default_account": "Dompet",
   "kind_cash": "Tunai",
@@ -66,5 +65,6 @@
   "banner_full_title": "Data Anda hanya ada di perangkat ini",
   "banner_full_body": "Jika browser ini menghapus datanya atau perangkat hilang, semuanya ikut hilang. Pencadangan dan sinkronisasi hadir di pembaruan berikutnya.",
   "banner_dismiss": "Ingatkan besok",
-  "accounts_empty": "Belum ada akun."
+  "accounts_empty": "Belum ada akun.",
+  "welcome_failed": "Tidak dapat menyimpan pengaturan: {message}"
 }

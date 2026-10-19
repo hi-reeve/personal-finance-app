@@ -36,7 +36,9 @@ export function Welcome() {
         account: { name: trimmed, kind, currency, openingBalance: 0 },
       });
     } catch (error) {
-      setProblem(error instanceof Error ? error.message : String(error));
+      setProblem(
+        t.welcome_failed({ message: error instanceof Error ? error.message : String(error) }),
+      );
       setSaving(false);
     }
   }

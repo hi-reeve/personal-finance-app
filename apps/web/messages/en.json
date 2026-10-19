@@ -53,7 +53,6 @@
   "welcome_currency": "Base currency",
   "welcome_account_name": "Account name",
   "welcome_account_kind": "Type",
-  "welcome_name_required": "Give the account a name.",
   "welcome_start": "Start",
   "welcome_default_account": "Wallet",
   "kind_cash": "Cash",
@@ -66,5 +65,6 @@
   "banner_full_title": "Your data is only on this device",
   "banner_full_body": "If this browser clears its data or you lose this device, everything is gone. Backup and sync arrive in a later update.",
   "banner_dismiss": "Remind me tomorrow",
-  "accounts_empty": "No accounts yet."
+  "accounts_empty": "No accounts yet.",
+  "welcome_failed": "Could not save your setup: {message}"
 }

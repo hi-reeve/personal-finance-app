@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { HeadContent, Outlet, Scripts, createRootRoute } from "@tanstack/react-router";
 import { themeCss } from "@pfa/tokens";
 import { APPEARANCE_INIT_SCRIPT, AppearanceProvider } from "../components/appearance";
@@ -6,6 +6,7 @@ import { AppShell } from "../components/app-shell";
 import { HideAmountsProvider } from "../components/hide-amounts";
 import { LocaleProvider } from "../components/locale";
 import { PwaBanner } from "../pwa/pwa-banner";
+import { requestPersistence } from "../storage/persistence";
 import { usePwa } from "../pwa/use-pwa";
 import appCss from "../styles.css?url";
 
@@ -34,6 +35,10 @@ export const Route = createRootRoute({
 
 function Root() {
   const pwa = usePwa();
+  // Ask once at start-up so the browser can protect our data from the first record on.
+  useEffect(() => {
+    void requestPersistence();
+  }, []);
   return (
     <AppearanceProvider>
       <LocaleProvider>

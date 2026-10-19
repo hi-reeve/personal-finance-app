@@ -5,6 +5,7 @@ import { AppearanceControls } from "../components/appearance";
 import { HideAmountsToggle } from "../components/hide-amounts";
 import { LocaleControls, useLocale } from "../components/locale";
 import { Page } from "../components/page";
+import { StorageSection } from "../components/storage-section";
 
 export const Route = createFileRoute("/settings")({ component: Settings });
 
@@ -61,6 +62,8 @@ function Settings() {
           </span>
         </p>
       </section>
+
+      <StorageSection />
     </Page>
   );
 }

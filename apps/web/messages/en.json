@@ -35,5 +35,15 @@
   "add_close": "Close",
   "add_placeholder": "The transaction form arrives with the next tickets.",
   "app_name": "Personal finance",
-  "skip_to_content": "Skip to content"
+  "skip_to_content": "Skip to content",
+  "section_storage": "Storage",
+  "storage_persistence": "Persistent storage",
+  "storage_granted": "Protected: the browser will not clear this data automatically.",
+  "storage_denied": "Not guaranteed: the browser may clear this data when space is low.",
+  "storage_unsupported": "This browser cannot guarantee storage.",
+  "storage_error": "Could not ask the browser: {message}",
+  "storage_unknown": "Checking…",
+  "storage_check_button": "Run storage check",
+  "storage_check_count": "{count} check records saved in this browser",
+  "storage_check_failed": "Storage check failed: {message}"
 }

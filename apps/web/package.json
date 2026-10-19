@@ -17,6 +17,7 @@
     "@pfa/core": "workspace:*",
     "@pfa/protocol": "workspace:*",
     "@pfa/tokens": "workspace:*",
+    "@sqlite.org/sqlite-wasm": "3.53.4-build2",
     "@tanstack/react-router": "^1.170.45",
     "@tanstack/react-start": "^1.169.3",
     "react": "^19.3.1",

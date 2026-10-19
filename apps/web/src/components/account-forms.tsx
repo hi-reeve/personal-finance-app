@@ -80,8 +80,8 @@ export function AccountForm({
         kind,
         currency,
         isLiability: liability,
-        ...(icon ? { icon } : {}),
-        ...(color ? { color } : {}),
+        icon,
+        color,
         ...(amount !== undefined ? { openingBalance: amount } : {}),
       },
       makeDefault,
@@ -100,7 +100,7 @@ export function AccountForm({
           onChange={(e) => {
             const next = e.target.value as AccountKind;
             setKind(next);
-            if (!account) setLiability(next === "credit-card");
+            setLiability(next === "credit-card");
           }}
         >
           {ACCOUNT_KINDS.map((k) => (
@@ -227,7 +227,11 @@ export function AdjustForm({
       return;
     }
     setProblem(undefined);
-    await onApply(amount, new Date().toISOString().slice(0, 10));
+    const now = new Date();
+    const day = [now.getFullYear(), now.getMonth() + 1, now.getDate()]
+      .map((part) => String(part).padStart(2, "0"))
+      .join("-");
+    await onApply(amount, day);
   }
 
   return (

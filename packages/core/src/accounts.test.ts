@@ -97,6 +97,14 @@ describe("editing an Account", () => {
     expect((await engine.listAccounts())[0]).toEqual(edited);
   });
 
+  it("clears an icon or colour with an empty string", async () => {
+    const { engine } = await device();
+    const account = await engine.createAccount({ ...wallet, icon: "bank", color: "sage" });
+    const edited = await engine.editAccount(account.id, { icon: "", color: "" });
+    expect(edited.icon).toBeUndefined();
+    expect(edited.color).toBeUndefined();
+  });
+
   it("marks a credit card as a liability unless told otherwise", async () => {
     const { engine } = await device();
     const card = await engine.createAccount({ ...wallet, name: "Card", kind: "credit-card" });
@@ -171,6 +179,12 @@ describe("archiving and deleting", () => {
 });
 
 describe("default Account", () => {
+  it("is the first Account made at setup", async () => {
+    const { engine } = await device();
+    const first = await engine.completeSetup({ baseCurrency: "IDR", account: wallet });
+    expect(engine.getSettings().defaultAccountId).toBe(first.id);
+  });
+
   it("is chosen in settings and survives a restart", async () => {
     const first = await device();
     const a = await first.engine.createAccount(wallet);

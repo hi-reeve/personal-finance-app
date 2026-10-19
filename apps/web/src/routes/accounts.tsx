@@ -29,14 +29,17 @@ function AccountList({ app }: { app: ReadyState }) {
   const archived = app.accounts.filter((a) => a.archivedAt !== undefined);
   const done = () => setEditing(undefined);
 
-  async function run(change: Parameters<typeof app.act>[0]) {
+  /** Resolves true when the change was saved; on failure the form stays open with what was typed. */
+  async function run(change: Parameters<typeof app.act>[0]): Promise<boolean> {
     setProblem(undefined);
     try {
       await app.act(change);
+      return true;
     } catch (error) {
       setProblem(
         t.accounts_failed({ message: error instanceof Error ? error.message : String(error) }),
       );
+      return false;
     }
   }
 
@@ -71,12 +74,12 @@ function AccountList({ app }: { app: ReadyState }) {
             isDefault={isDefault}
             onCancel={done}
             onSave={async (patch, makeDefault) => {
-              await run(async (engine) => {
+              const saved = await run(async (engine) => {
                 await engine.editAccount(account.id, patch);
                 if (makeDefault !== isDefault)
                   await engine.setDefaultAccount(makeDefault ? account.id : undefined);
               });
-              done();
+              if (saved) done();
             }}
           />
         )}
@@ -85,8 +88,7 @@ function AccountList({ app }: { app: ReadyState }) {
             account={account}
             onCancel={done}
             onApply={async (target, date) => {
-              await run((engine) => engine.adjustBalance(account.id, { target, date }));
-              done();
+              if (await run((engine) => engine.adjustBalance(account.id, { target, date }))) done();
             }}
           />
         )}
@@ -103,6 +105,7 @@ function AccountList({ app }: { app: ReadyState }) {
             <button
               type="button"
               className={BUTTON}
+              aria-label={`${t.accounts_adjust()}: ${account.name}`}
               onClick={() => setEditing({ id: account.id, mode: "adjust" })}
             >
               {t.accounts_adjust()}
@@ -112,6 +115,7 @@ function AccountList({ app }: { app: ReadyState }) {
                 type="button"
                 className={BUTTON}
                 title={t.accounts_archive_hint()}
+                aria-label={`${t.accounts_archive()}: ${account.name}`}
                 onClick={() => run((engine) => engine.archiveAccount(account.id))}
               >
                 {t.accounts_archive()}
@@ -120,6 +124,7 @@ function AccountList({ app }: { app: ReadyState }) {
               <button
                 type="button"
                 className={BUTTON}
+                aria-label={`${t.accounts_delete()}: ${account.name}`}
                 onClick={() => run((engine) => engine.deleteAccount(account.id))}
               >
                 {t.accounts_delete()}
@@ -148,7 +153,7 @@ function AccountList({ app }: { app: ReadyState }) {
         <AccountForm
           onCancel={done}
           onSave={async (patch) => {
-            await run((engine) =>
+            const saved = await run((engine) =>
               engine.createAccount({
                 name: patch.name ?? "",
                 kind: patch.kind ?? "cash",
@@ -159,7 +164,7 @@ function AccountList({ app }: { app: ReadyState }) {
                 ...(patch.isLiability !== undefined ? { isLiability: patch.isLiability } : {}),
               }),
             );
-            done();
+            if (saved) done();
           }}
         />
       ) : (
@@ -188,6 +193,7 @@ function AccountList({ app }: { app: ReadyState }) {
                 <button
                   type="button"
                   className={BUTTON}
+                  aria-label={`${t.accounts_restore()}: ${account.name}`}
                   onClick={() => run((engine) => engine.unarchiveAccount(account.id))}
                 >
                   {t.accounts_restore()}

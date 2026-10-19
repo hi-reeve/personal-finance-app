@@ -69,7 +69,11 @@ export type NewAccount = Omit<Account, "id" | "createdAt" | "archivedAt" | "isLi
 };
 
 /** What can change on an Account. Currency locks once the Account has Transactions. */
-export type AccountPatch = Partial<Omit<NewAccount, "openingBalance">>;
+export type AccountPatch = Partial<Omit<NewAccount, "openingBalance" | "icon" | "color">> & {
+  /** An empty string clears it. */
+  icon?: AccountIcon | "";
+  color?: AccountColor | "";
+};
 
 /** Synced settings. Empty until first-run setup completes. */
 export interface Settings {
@@ -325,8 +329,8 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
   function readAccount(id: string): Account {
     const f = accounts.get(id)!;
     const kind = text(f, "kind") as AccountKind;
-    const icon = text(f, "icon") as AccountIcon | undefined;
-    const color = text(f, "color") as AccountColor | undefined;
+    const icon = (text(f, "icon") || undefined) as AccountIcon | undefined;
+    const color = (text(f, "color") || undefined) as AccountColor | undefined;
     const archived = archivedAt(f);
     const liability = f.get("isLiability")?.value;
     return {
@@ -437,7 +441,10 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
       const checked = checkAccount(account);
       const created = accountOps(checked);
       const setupAt = clock.now();
-      await commit([...opsFor("settings", SETTINGS_ID, { baseCurrency, setupAt }), ...created.ops]);
+      await commit([
+        ...opsFor("settings", SETTINGS_ID, { baseCurrency, setupAt, defaultAccountId: created.id }),
+        ...created.ops,
+      ]);
       return readAccount(created.id);
     },
     async createAccount(input) {
@@ -454,13 +461,17 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
     async editAccount(id, patch) {
       assertAccount(id);
       const current = readAccount(id);
-      const { isLiability, ...fields } = patch;
+      const { isLiability, icon, color, ...fields } = patch;
       const merged = checkAccount({ ...current, ...fields });
+      if (icon) assertAccountIcon(icon);
+      if (color) assertAccountColor(color);
       if (merged.currency !== current.currency && liveTransactionsOn(id).length > 0)
         throw new Error("The currency cannot change once the Account has Transactions");
       await commit(
         opsFor("account", id, {
-          ...pick(merged, ["name", "kind", "currency", "icon", "color"] as const),
+          ...pick(merged, ["name", "kind", "currency"] as const),
+          ...(icon !== undefined ? { icon } : {}),
+          ...(color !== undefined ? { color } : {}),
           ...(isLiability !== undefined ? { isLiability: isLiability ? 1 : 0 } : {}),
         }),
       );
@@ -474,7 +485,6 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
       return record({
         accountId,
         date,
-        note: "Balance adjustment",
         lines: [{ categoryId: BALANCE_ADJUSTMENT_CATEGORY, amount: difference }],
       });
     },

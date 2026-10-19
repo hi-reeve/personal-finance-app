@@ -10,8 +10,10 @@ _Avoid_: workspace, tenant, user account
 **Device**: One installed or opened copy of the app with its own signing key, registered into a Space at pairing.
 _Avoid_: client (in user-facing text), session
 
-**Account**: A place where money sits, with one currency, an opening balance, and a kind (cash, bank, e-wallet, credit card, other). Balance is computed, never stored. Archived rather than deleted once it has history.
+**Account**: A place where money sits, with one currency, an opening balance, and a kind (cash, bank, e-wallet, credit card, other). Balance is computed, never stored. Archived rather than deleted once it has history. May be marked a **liability** (on by default for a credit card), and one Account can be the **default** that Add starts on.
 _Avoid_: wallet, bank (as a general term)
+
+**Balance adjustment**: A Transaction that corrects an Account's balance to match the bank, recorded in the reserved Balance adjustment Category. Reports ignore it.
 
 **Transaction**: One payment or receipt on an Account, on a calendar date. Has one or more Lines. Its total is the sum of its Lines and is never stored.
 _Avoid_: entry, payment

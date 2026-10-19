@@ -39,26 +39,42 @@ function openEngine(): Promise<Engine> {
   return opened;
 }
 
+export interface AccountView extends Account {
+  balance: number;
+  /** Has live Transactions: it can then only be archived, and its currency is locked. */
+  hasHistory: boolean;
+}
+
 export interface Snapshot {
   settings: Settings;
-  accounts: Account[];
+  accounts: AccountView[];
   transactions: number;
 }
 
-export type AppState =
-  | { status: "loading" }
-  | { status: "error"; message: string }
-  | ({ status: "ready"; completeSetup: CompleteSetup } & Snapshot);
+export type ReadyState = { status: "ready"; completeSetup: CompleteSetup; act: Act } & Snapshot;
+
+export type AppState = { status: "loading" } | { status: "error"; message: string } | ReadyState;
 
 type CompleteSetup = (input: { baseCurrency: CurrencyCode; account: NewAccount }) => Promise<void>;
+
+/** Runs a change on the engine, then refreshes what the screens show. */
+type Act = (change: (engine: Engine) => Promise<unknown>) => Promise<void>;
 
 const AppContext = createContext<AppState>({ status: "loading" });
 
 async function snapshot(engine: Engine): Promise<Snapshot> {
-  const [accounts, transactions] = await Promise.all([
+  const [list, transactions] = await Promise.all([
     engine.listAccounts(),
     engine.listTransactions(),
   ]);
+  const used = new Set(transactions.map((tx) => tx.accountId));
+  const accounts = await Promise.all(
+    list.map(async (account) => ({
+      ...account,
+      balance: await engine.getBalance(account.id),
+      hasHistory: used.has(account.id),
+    })),
+  );
   return { settings: engine.getSettings(), accounts, transactions: transactions.length };
 }
 
@@ -73,12 +89,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState((current) => (current.status === "ready" ? { ...current, ...next } : current));
   }, []);
 
+  const act = useCallback<Act>(async (change) => {
+    const engine = await openEngine();
+    await change(engine);
+    const next = await snapshot(engine);
+    setState((current) => (current.status === "ready" ? { ...current, ...next } : current));
+  }, []);
+
   useEffect(() => {
     let live = true;
     openEngine()
       .then(snapshot)
       .then(
-        (next) => live && setState({ status: "ready", completeSetup, ...next }),
+        (next) => live && setState({ status: "ready", completeSetup, act, ...next }),
         (error: unknown) =>
           live &&
           setState({
@@ -89,7 +112,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => {
       live = false;
     };
-  }, [completeSetup]);
+  }, [completeSetup, act]);
 
   return <AppContext.Provider value={state}>{children}</AppContext.Provider>;
 }

@@ -65,6 +65,35 @@ export function formatMoney(
   return `${negative ? "-" : ""}${info.symbol}${info.spaced ? " " : ""}${number}`;
 }
 
+/**
+ * Reads an amount the user typed, in the chosen separator style, into whole minor units of
+ * `currency`. Returns `undefined` for anything that is not exactly an amount, including more
+ * decimals than the currency has.
+ */
+export function parseMoney(
+  text: string,
+  currency: CurrencyCode,
+  { numberFormat }: MoneyFormatOptions,
+): number | undefined {
+  const info: CurrencyInfo | undefined = Object.hasOwn(CURRENCIES, currency)
+    ? CURRENCIES[currency]
+    : undefined;
+  if (info === undefined) throw new Error(`Unsupported currency "${currency}"`);
+  const { thousands, decimal } = SEPARATORS[numberFormat];
+  const escape = (c: string) => `\\${c}`;
+  const pattern = new RegExp(
+    `^(-?)(\\d{1,3}(?:${escape(thousands)}\\d{3})+|\\d+)(?:${escape(decimal)}(\\d+))?$`,
+  );
+  const match = pattern.exec(text.trim());
+  if (match === null) return undefined;
+  const [, sign = "", whole = "", fraction = ""] = match;
+  if (fraction.length > info.exponent) return undefined;
+  const digits = whole.split(thousands).join("") + fraction.padEnd(info.exponent, "0");
+  const value = Number(digits);
+  if (!Number.isSafeInteger(value)) return undefined;
+  return sign === "-" && value !== 0 ? -value : value;
+}
+
 const DATE_LOCALES = { id, en: enUS };
 
 /** A plain `YYYY-MM-DD` date as "18 Okt 2026" / "18 Oct 2026". No time zone is involved. */

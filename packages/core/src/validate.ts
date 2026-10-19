@@ -29,3 +29,22 @@ export function assertAccountKind(value: string): void {
     throw new Error(`Invalid Account kind "${value}": expected one of ${ACCOUNT_KINDS.join(", ")}`);
   }
 }
+
+export const ACCOUNT_ICONS = ["wallet", "bank", "phone", "card", "piggy", "briefcase"] as const;
+export type AccountIcon = (typeof ACCOUNT_ICONS)[number];
+
+/** Colours are the app's accent names, so an Account takes the theme's matching shade. */
+export const ACCOUNT_COLORS = ["terracotta", "brown", "teal", "slate", "sage", "plum"] as const;
+export type AccountColor = (typeof ACCOUNT_COLORS)[number];
+
+export function assertAccountIcon(value: string): void {
+  if (!ACCOUNT_ICONS.includes(value as AccountIcon))
+    throw new Error(`Invalid Account icon "${value}": expected one of ${ACCOUNT_ICONS.join(", ")}`);
+}
+
+export function assertAccountColor(value: string): void {
+  if (!ACCOUNT_COLORS.includes(value as AccountColor))
+    throw new Error(
+      `Invalid Account colour "${value}": expected one of ${ACCOUNT_COLORS.join(", ")}`,
+    );
+}

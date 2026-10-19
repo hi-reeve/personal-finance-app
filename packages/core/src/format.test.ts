@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import { formatDate, formatMoney } from "./index";
+import { formatDate, formatMoney, parseMoney } from "./index";
 
 const dotComma = { numberFormat: "dot-comma" } as const;
 const commaDot = { numberFormat: "comma-dot" } as const;
@@ -57,5 +57,30 @@ describe("formatDate", () => {
 
   it("rejects dates that do not exist", () => {
     expect(() => formatDate("2026-02-30", "en")).toThrow();
+  });
+});
+
+describe("parseMoney", () => {
+  it("reads typed amounts in the chosen separator style, as whole minor units", () => {
+    expect(parseMoney("25000", "IDR", dotComma)).toBe(25_000);
+    expect(parseMoney("1.234.567", "IDR", dotComma)).toBe(1_234_567);
+    expect(parseMoney("1,234.50", "USD", commaDot)).toBe(123_450);
+    expect(parseMoney("1.234,5", "EUR", dotComma)).toBe(123_450);
+    expect(parseMoney("12.05", "USD", commaDot)).toBe(1_205);
+    expect(parseMoney(" 7 ", "USD", commaDot)).toBe(700);
+  });
+
+  it("reads negatives, and keeps negative zero out", () => {
+    expect(parseMoney("-25.000", "IDR", dotComma)).toBe(-25_000);
+    expect(parseMoney("-0", "IDR", dotComma)).toBe(0);
+    expect(Object.is(parseMoney("-0", "IDR", dotComma), 0)).toBe(true);
+  });
+
+  it("rejects anything that is not exactly an amount", () => {
+    for (const bad of ["", " ", "abc", "1,5", "12.34", "1.2.3", "--1", "1e3", "Rp 5"]) {
+      expect(parseMoney(bad, "IDR", dotComma), bad).toBeUndefined();
+    }
+    expect(parseMoney("1.234", "USD", commaDot)).toBeUndefined();
+    expect(parseMoney("99999999999999999", "IDR", dotComma)).toBeUndefined();
   });
 });

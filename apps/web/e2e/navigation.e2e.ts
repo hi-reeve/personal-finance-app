@@ -1,5 +1,6 @@
 import { resolve } from "node:path";
 import { expect, test, type Page } from "@playwright/test";
+import { openApp } from "./helpers";
 
 const BUILT = resolve("dist/client");
 
@@ -20,7 +21,7 @@ test.beforeEach(async ({ page }) => {
 
 async function open(page: Page, layout: Layout, path = "/") {
   await page.setViewportSize(SIZES[layout]);
-  await page.goto(path);
+  await openApp(page, path);
   await expect(page.locator("h1")).toBeVisible();
 }
 

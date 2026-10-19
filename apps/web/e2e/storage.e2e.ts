@@ -1,5 +1,6 @@
 import { resolve } from "node:path";
 import { expect, test } from "@playwright/test";
+import { openApp } from "./helpers";
 
 const BUILT = resolve("dist/client");
 
@@ -12,7 +13,7 @@ test.beforeEach(async ({ page }) => {
 test("records written through core survive a reload, and the persistence request is recorded", async ({
   page,
 }) => {
-  await page.goto("/settings");
+  await openApp(page, "/settings");
   const count = page.getByRole("status").filter({ hasText: "check records" });
   await expect(count).toContainText("0 check records");
 
@@ -38,7 +39,7 @@ test("a second tab is told the data is open elsewhere instead of touching it", a
   page,
   context,
 }) => {
-  await page.goto("/settings");
+  await openApp(page, "/settings");
   await page.getByRole("button", { name: "Run storage check" }).click();
   await expect(page.getByRole("status").filter({ hasText: "check records" })).toContainText("1");
 

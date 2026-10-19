@@ -40,8 +40,9 @@ export function readPersistenceOutcome(): PersistenceOutcome | undefined {
   try {
     const raw: unknown = JSON.parse(localStorage.getItem(KEY) ?? "null");
     if (typeof raw !== "object" || raw === null) return undefined;
-    const { status, checkedAt } = raw as Record<string, unknown>;
+    const { status, checkedAt, message } = raw as Record<string, unknown>;
     if (typeof checkedAt !== "number") return undefined;
+    if (status === "error" && typeof message === "string") return { status, checkedAt, message };
     if (status === "granted" || status === "denied" || status === "unsupported") {
       return { status, checkedAt };
     }

@@ -1,8 +1,7 @@
-import type { SqlValue } from "./sqlite-store";
+export type SqlValue = string | number;
 
 /** Messages between the page and the Worker that owns the database file. */
 export type Request =
-  | { id: number; type: "open"; file: string }
   | {
       id: number;
       type: "transaction";

@@ -33,3 +33,27 @@ test("records written through core survive a reload, and the persistence request
     status: expect.stringMatching(/^(granted|denied|unsupported)$/),
   });
 });
+
+test("a second tab is told the data is open elsewhere instead of touching it", async ({
+  page,
+  context,
+}) => {
+  await page.goto("/settings");
+  await page.getByRole("button", { name: "Run storage check" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "check records" })).toContainText("1");
+
+  const second = await context.newPage();
+  await second.goto("/settings");
+  await expect(second.getByRole("alert")).toContainText("Another tab already has your data open");
+
+  // The first tab's data is untouched, and a reload there still reads it.
+  await page.reload();
+  await expect(page.getByRole("status").filter({ hasText: "check records" })).toContainText("1");
+});
+
+test("persistence is requested at start-up, not only when Settings is opened", async ({ page }) => {
+  await page.goto("/");
+  await expect
+    .poll(() => page.evaluate(() => localStorage.getItem("pfa.persistence")))
+    .not.toBeNull();
+});

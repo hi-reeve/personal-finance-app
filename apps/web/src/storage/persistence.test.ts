@@ -48,6 +48,15 @@ describe("requestPersistence", () => {
     expect(outcome).toEqual({ status: "error", checkedAt: 5, message: "blocked" });
   });
 
+  it("reads back an error outcome after a reload", async () => {
+    stubStorage({
+      persist: vi.fn().mockRejectedValue(new Error("blocked")),
+      persisted: vi.fn().mockResolvedValue(false),
+    });
+    await requestPersistence(() => 5);
+    expect(readPersistenceOutcome()).toEqual({ status: "error", checkedAt: 5, message: "blocked" });
+  });
+
   it("ignores a damaged record", () => {
     localStorage.setItem("pfa.persistence", '{"status":"granted"}');
     expect(readPersistenceOutcome()).toBeUndefined();

@@ -1,6 +1,6 @@
 import type { Op, OpStore } from "@pfa/core";
 
-export type SqlValue = string | number;
+import type { SqlValue } from "./protocol";
 
 /**
  * The little this store needs from a SQLite database. In the browser it is backed by a Worker that
@@ -20,7 +20,7 @@ const CREATE = `CREATE TABLE IF NOT EXISTS ops (
 
 /** The op log in SQLite. One row per op, kept as JSON, read back in insertion order. */
 export function createSqliteStore(db: SqlDb): OpStore {
-  const ready = db.transaction([{ sql: CREATE }]);
+  const ready = db.transaction([{ sql: CREATE }, { sql: "PRAGMA user_version = 1" }]);
   return {
     async append(ops: readonly Op[]) {
       await ready;

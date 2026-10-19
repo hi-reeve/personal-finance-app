@@ -12,13 +12,13 @@ const pool = sqlite3InitModule().then((sqlite3) =>
   sqlite3.installOpfsSAHPoolVfs({ name: POOL_NAME, directory: "/pfa-opfs", clearOnInit: false }),
 );
 
-const databases = new Map<string, OpfsSAHPoolDatabase>();
+const databases = new Map<string, Promise<OpfsSAHPoolDatabase>>();
 
-async function database(file: string): Promise<OpfsSAHPoolDatabase> {
+function database(file: string): Promise<OpfsSAHPoolDatabase> {
   let db = databases.get(file);
   if (db === undefined) {
-    const vfs = await pool;
-    db = new vfs.OpfsSAHPoolDb(`/${file}`);
+    // Cache the promise, not the result, so two first requests cannot open the file twice.
+    db = pool.then((vfs) => new vfs.OpfsSAHPoolDb(`/${file}`));
     databases.set(file, db);
   }
   return db;
@@ -27,8 +27,6 @@ async function database(file: string): Promise<OpfsSAHPoolDatabase> {
 async function handle(request: Request): Promise<unknown> {
   const db = await database(request.file);
   switch (request.type) {
-    case "open":
-      return null;
     case "transaction":
       db.transaction(() => {
         for (const { sql, bind } of request.statements) db.exec({ sql, bind: bind ?? [] });

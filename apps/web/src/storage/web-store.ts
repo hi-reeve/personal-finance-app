@@ -11,6 +11,29 @@ const pending = new Map<
   { resolve: (value: unknown) => void; reject: (e: Error) => void }
 >();
 
+const LOCK = "pfa-storage";
+let lock: Promise<void> | undefined;
+
+/**
+ * Only one tab may own the database. The SAH pool VFS cannot be shared, and a second tab that tries
+ * to start it can wipe the pool. So take a Web Lock first, hold it for the life of the tab, and refuse
+ * to start the worker if another tab has it.
+ */
+function claimDatabase(): Promise<void> {
+  lock ??= new Promise<void>((resolve, reject) => {
+    if (!navigator.locks) return resolve();
+    void navigator.locks.request(LOCK, { ifAvailable: true }, (held) => {
+      if (held === null) {
+        reject(new Error("Another tab already has your data open. Close it and try again."));
+        return;
+      }
+      resolve();
+      return new Promise<never>(() => {});
+    });
+  });
+  return lock;
+}
+
 function connect(): Worker {
   if (worker !== undefined) return worker;
   const created = new Worker(new URL("./sqlite.worker.ts", import.meta.url), { type: "module" });
@@ -21,17 +44,21 @@ function connect(): Worker {
     if (event.data.ok) waiting.resolve(event.data.result);
     else waiting.reject(new Error(event.data.error));
   };
-  created.onerror = (event) => {
-    const error = new Error(event.message || "The storage worker failed to start");
+  const fail = (message: string) => {
+    const error = new Error(message);
     for (const waiting of pending.values()) waiting.reject(error);
     pending.clear();
+    created.terminate();
     worker = undefined;
   };
+  created.onerror = (event) => fail(event.message || "The storage worker failed to start");
+  created.onmessageerror = () => fail("The storage worker sent a message that could not be read");
   worker = created;
   return created;
 }
 
-function call(message: Call): Promise<unknown> {
+async function call(message: Call): Promise<unknown> {
+  await claimDatabase();
   const id = nextId++;
   return new Promise((resolve, reject) => {
     pending.set(id, { resolve, reject });

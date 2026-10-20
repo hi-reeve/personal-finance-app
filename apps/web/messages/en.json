@@ -217,5 +217,19 @@
   "filters_results": "Showing {shown} of {total}",
   "filters_none": "Nothing matches these filters.",
   "filters_show_more": "Show more",
-  "filters_min_over_max": "The smallest amount is above the largest."
+  "filters_min_over_max": "The smallest amount is above the largest.",
+  "rate_label": "Exchange rate: 1 {from} = ? {to}",
+  "rate_loading": "Looking up the rate…",
+  "rate_missing": "No rate found. Enter one by hand.",
+  "rate_saved": "Rate for that day, saved on this device.",
+  "rate_fetched": "Rate for that day. Change it if yours differs.",
+  "rate_preview": "About {amount}.",
+  "rate_invalid": "Enter a rate like {example}.",
+  "tx_need_rate": "Enter the exchange rate.",
+  "orig_summary": "Original amount (optional)",
+  "orig_amount": "Paid originally",
+  "orig_currency": "Original currency",
+  "orig_invalid": "Enter the original amount like {example}, or leave it empty.",
+  "activity_original": "Paid {amount}",
+  "activity_base": "≈ {amount}"
 }

@@ -1,4 +1,5 @@
 import {
+  convertMinor,
   filterActivity,
   parseMoney,
   type ActivityEntry,
@@ -40,6 +41,28 @@ function List({ app }: { app: ReadyState }) {
   const accounts = new Map(app.accounts.map((a) => [a.id, a]));
   const currencyOf = (tx: Transaction) =>
     accounts.get(tx.accountId)?.currency ?? app.settings.baseCurrency ?? "USD";
+
+  const baseCurrency = app.settings.baseCurrency;
+  // What a foreign Transaction came to in the base currency, at its own frozen rate.
+  const baseText = (tx: Transaction): string | undefined => {
+    const currency = accounts.get(tx.accountId)?.currency;
+    if (baseCurrency === undefined || currency === undefined || currency === baseCurrency)
+      return undefined;
+    const rate = tx.rate;
+    if (rate === undefined) return undefined;
+    // Per Line, the same way the report engine counts, so both always agree.
+    return t.activity_base({
+      amount: money(
+        Math.abs(
+          tx.lines.reduce(
+            (sum, line) => sum + convertMinor(line.amount, rate, currency, baseCurrency),
+            0,
+          ),
+        ),
+        baseCurrency,
+      ),
+    });
+  };
 
   // A Transfer's fee shows inside its Transfer, not as a Transaction of its own.
   const everything = useMemo<ActivityEntry[]>(() => {
@@ -164,6 +187,7 @@ function List({ app }: { app: ReadyState }) {
                 />
               );
             const tx = entry.transaction;
+            const inBase = baseText(tx);
             const account = accounts.get(tx.accountId);
             const category = label(tx.lines[0]?.categoryId ?? "");
             const title = tx.payee ?? category;
@@ -195,6 +219,16 @@ function List({ app }: { app: ReadyState }) {
                           </li>
                         ))}
                       </ul>
+                    )}
+                    {tx.original !== undefined && (
+                      <span className="block truncate text-sm text-ink-muted">
+                        {t.activity_original({
+                          amount: money(tx.original.amount, tx.original.currency),
+                        })}
+                      </span>
+                    )}
+                    {inBase !== undefined && (
+                      <span className="block truncate text-sm text-ink-muted">{inBase}</span>
                     )}
                     {tx.note !== undefined && (
                       <span className="block truncate text-sm text-ink-muted">{tx.note}</span>

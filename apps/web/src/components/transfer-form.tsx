@@ -1,7 +1,9 @@
-import { parseMoney, type Transfer } from "@pfa/core";
+import { parseMoney, type Transfer, type TransferFee } from "@pfa/core";
 import { useState, type FormEvent } from "react";
 import type { ReadyState } from "../app/app-provider";
+import { formatRateInput, parseRateInput } from "../app/rate-input";
 import { today } from "../app/today";
+import { RateField } from "./rate-field";
 import { CategoryPicker } from "./category-picker";
 import { useLocale } from "./locale";
 import { FIELD, FOCUS } from "./styles";
@@ -38,6 +40,12 @@ export function TransferForm({
   const [fee, setFee] = useState(
     transfer?.fee && from ? plain(transfer.fee.amount, from.currency) : "",
   );
+  const base = app.settings.baseCurrency;
+  // A fee charged in another currency than the base needs a rate, like any such spending.
+  const feeNeedsRate = from !== undefined && base !== undefined && from.currency !== base;
+  const [feeRate, setFeeRate] = useState(
+    transfer?.fee?.rate ? formatRateInput(transfer.fee.rate, numberFormat) : "",
+  );
   const [feeCategory, setFeeCategory] = useState<string | undefined>(transfer?.fee?.categoryId);
   const [date, setDate] = useState(transfer?.date ?? today());
   const [note, setNote] = useState(transfer?.note ?? "");
@@ -56,12 +64,14 @@ export function TransferForm({
       : parseMoney(received, to.currency, { numberFormat });
     if (fromAmount === undefined || fromAmount <= 0 || toAmount === undefined || toAmount <= 0)
       return setProblem(t.tx_invalid_amount({ example }));
-    let feeInput: { amount: number; categoryId: string } | null = null;
+    let feeInput: TransferFee | null = null;
     if (fee.trim() !== "") {
       const amount = parseMoney(fee, from.currency, { numberFormat });
       if (amount === undefined || amount <= 0) return setProblem(t.tr_invalid_fee({ example }));
       if (feeCategory === undefined) return setProblem(t.tr_need_fee_category());
-      feeInput = { amount, categoryId: feeCategory };
+      const rate = feeNeedsRate ? parseRateInput(feeRate, numberFormat) : undefined;
+      if (feeNeedsRate && rate === undefined) return setProblem(t.tx_need_rate());
+      feeInput = { amount, categoryId: feeCategory, ...(rate !== undefined ? { rate } : {}) };
     }
     setProblem(undefined);
     setSaving(true);
@@ -176,6 +186,16 @@ export function TransferForm({
             kind="expense"
           />
         </fieldset>
+      )}
+      {fee.trim() !== "" && feeNeedsRate && from !== undefined && base !== undefined && (
+        <RateField
+          date={date}
+          from={from.currency}
+          to={base}
+          value={feeRate}
+          onChange={setFeeRate}
+          amount={parseMoney(fee, from.currency, { numberFormat })}
+        />
       )}
       <label className="flex flex-col gap-1">
         <span>{t.tx_date()}</span>

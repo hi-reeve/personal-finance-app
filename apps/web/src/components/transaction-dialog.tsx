@@ -1,7 +1,10 @@
 import {
   BALANCE_ADJUSTMENT_CATEGORY,
+  currencyCodes,
   parseMoney,
   signedAmount,
+  type CurrencyCode,
+  type OriginalAmount,
   type Transaction,
   type Transfer,
 } from "@pfa/core";
@@ -11,7 +14,9 @@ import { Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useApp, type ReadyState } from "../app/app-provider";
 import { today } from "../app/today";
+import { formatRateInput, parseRateInput } from "../app/rate-input";
 import { useCategoryLabel } from "./category-label";
+import { RateField } from "./rate-field";
 import { TransferForm } from "./transfer-form";
 import { CategoryPicker } from "./category-picker";
 import { useLocale } from "./locale";
@@ -55,7 +60,8 @@ function TransactionForm({
   const [accountId, setAccountId] = useState(transaction?.accountId ?? defaultAccount ?? "");
   const account = app.accounts.find((a) => a.id === accountId);
   const currency = account?.currency ?? app.settings.baseCurrency ?? "USD";
-  const plain = (minor: number) => money(Math.abs(minor), currency).replace(/^[^\d-]+/, "");
+  const plain = (minor: number, code: CurrencyCode = currency) =>
+    money(Math.abs(minor), code).replace(/^[^\d-]+/, "");
   const nextKey = useRef(0);
   const draft = (init: Partial<LineDraft> = {}): LineDraft => ({
     key: nextKey.current++,
@@ -79,6 +85,17 @@ function TransactionForm({
   const [date, setDate] = useState(transaction?.date ?? today());
   const [payee, setPayee] = useState(transaction?.payee ?? "");
   const [note, setNote] = useState(transaction?.note ?? "");
+  const base = app.settings.baseCurrency;
+  const foreign = account !== undefined && base !== undefined && account.currency !== base;
+  const [rateText, setRateText] = useState(
+    transaction?.rate ? formatRateInput(transaction.rate, numberFormat) : "",
+  );
+  const [originalText, setOriginalText] = useState(
+    transaction?.original ? plain(transaction.original.amount, transaction.original.currency) : "",
+  );
+  const [originalCurrency, setOriginalCurrency] = useState<CurrencyCode>(
+    transaction?.original?.currency ?? (currency === "USD" ? "EUR" : "USD"),
+  );
   const [problem, setProblem] = useState<string | undefined>(undefined);
   const [saving, setSaving] = useState(false);
 
@@ -125,6 +142,17 @@ function TransactionForm({
       });
     }
     if (kinds.size > 1) return setProblem(t.tx_mixed_kinds());
+    const rate = foreign ? parseRateInput(rateText, numberFormat) : undefined;
+    if (foreign && rate === undefined) return setProblem(t.tx_need_rate());
+    let original: OriginalAmount | undefined;
+    if (originalText.trim() !== "") {
+      const amount = parseMoney(originalText, originalCurrency, { numberFormat });
+      if (amount === undefined || amount <= 0)
+        return setProblem(
+          t.orig_invalid({ example: money(150_000, originalCurrency).replace(/^[^\d-]+/, "") }),
+        );
+      original = { amount, currency: originalCurrency };
+    }
     setProblem(undefined);
     setSaving(true);
     try {
@@ -136,10 +164,23 @@ function TransactionForm({
             date,
             ...(text.payee !== "" ? { payee: text.payee } : {}),
             ...(text.note !== "" ? { note: text.note } : {}),
+            ...(rate !== undefined ? { rate } : {}),
+            ...(original ? { original } : {}),
             lines: stored.map(({ id: _id, ...line }) => line),
           });
         } else {
-          await engine.updateTransaction(transaction.id, { accountId, date, ...text }, stored);
+          await engine.updateTransaction(
+            transaction.id,
+            {
+              accountId,
+              date,
+              ...text,
+              ...(rate !== undefined ? { rate } : {}),
+              // Leaving the boxes empty removes an original amount that was there.
+              ...(original ? { original } : transaction.original ? { original: null } : {}),
+            },
+            stored,
+          );
         }
       });
       onDone();
@@ -268,6 +309,16 @@ function TransactionForm({
             ))}
         </select>
       </label>
+      {foreign && base !== undefined && account !== undefined && (
+        <RateField
+          date={date}
+          from={account.currency}
+          to={base}
+          value={rateText}
+          onChange={setRateText}
+          amount={total}
+        />
+      )}
       <label className="flex flex-col gap-1">
         <span>{t.tx_date()}</span>
         <input
@@ -285,6 +336,34 @@ function TransactionForm({
         <span>{t.tx_note()}</span>
         <input className={FIELD} value={note} onChange={(e) => setNote(e.target.value)} />
       </label>
+      <details className="flex flex-col gap-2" open={originalText !== ""}>
+        <summary className={`min-h-11 cursor-pointer py-2 ${FOCUS}`}>{t.orig_summary()}</summary>
+        <div className="grid grid-cols-2 gap-3">
+          <label className="flex flex-col gap-1">
+            <span>{t.orig_amount()}</span>
+            <input
+              className={FIELD}
+              inputMode="decimal"
+              value={originalText}
+              onChange={(e) => setOriginalText(e.target.value)}
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span>{t.orig_currency()}</span>
+            <select
+              className={FIELD}
+              value={originalCurrency}
+              onChange={(e) => setOriginalCurrency(e.target.value as CurrencyCode)}
+            >
+              {currencyCodes.map((code) => (
+                <option key={code} value={code}>
+                  {code}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      </details>
       {problem !== undefined && (
         <p role="alert" className="text-sm text-danger">
           {problem}

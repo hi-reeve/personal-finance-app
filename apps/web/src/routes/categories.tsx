@@ -58,6 +58,160 @@ function inTreeOrder(all: readonly Category[]): Category[] {
   return out;
 }
 
+interface RowContext {
+  app: ReadyState;
+  panel: Panel;
+  setPanel: (panel: Panel) => void;
+  close: () => void;
+  run: Run;
+  byId: Map<string, Category>;
+}
+
+type Run = (change: Parameters<ReadyState["act"]>[0]) => Promise<boolean>;
+
+function CategoryRow({ category, ctx }: { category: Category; ctx: RowContext }) {
+  const { t } = useLocale();
+  const { app, panel, setPanel, close, run, byId } = ctx;
+  const uses = app.categoryUse[category.id] ?? 0;
+  const mode = typeof panel === "object" && panel.id === category.id ? panel.mode : undefined;
+  const depth = depthOf(category, byId);
+  return (
+    <li
+      className="rounded-xl border border-line bg-surface p-3"
+      style={{ marginInlineStart: `${depth * 1.25}rem` }}
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="min-w-0 flex-1 font-medium">{category.name}</span>
+        {mode === undefined && (
+          <>
+            <button
+              type="button"
+              className={BUTTON}
+              aria-label={t.categories_rename_named({ name: category.name })}
+              onClick={() => setPanel({ id: category.id, mode: "rename" })}
+            >
+              {t.categories_rename()}
+            </button>
+            <button
+              type="button"
+              className={BUTTON}
+              aria-label={t.categories_move_named({ name: category.name })}
+              onClick={() => setPanel({ id: category.id, mode: "move" })}
+            >
+              {t.categories_move()}
+            </button>
+            <button
+              type="button"
+              className={BUTTON}
+              aria-label={t.categories_merge_named({ name: category.name })}
+              onClick={() => setPanel({ id: category.id, mode: "merge" })}
+            >
+              {t.categories_merge()}
+            </button>
+            {uses === 0 && (
+              <button
+                type="button"
+                className={BUTTON}
+                aria-label={t.categories_delete_named({ name: category.name })}
+                title={t.categories_delete_hint()}
+                onClick={() => run((engine) => engine.deleteCategory(category.id))}
+              >
+                {t.categories_delete()}
+              </button>
+            )}
+          </>
+        )}
+      </div>
+      {mode === undefined && uses > 0 && (
+        <p className="mt-1 text-sm text-ink-muted">{t.categories_in_use({ count: uses })}</p>
+      )}
+      {mode === "rename" && (
+        <RenameForm
+          initial={category.name}
+          onCancel={close}
+          onSave={async (name) => {
+            if (await run((engine) => engine.editCategory(category.id, { name }))) close();
+          }}
+        />
+      )}
+      {mode === "move" && (
+        <TargetForm
+          app={app}
+          category={category}
+          exclude={withDescendants(category.id, app.categories)}
+          noneLabel={t.categories_top_level()}
+          onCancel={close}
+          onApply={async (target) => {
+            if (await run((engine) => engine.moveCategory(category.id, target))) close();
+          }}
+        />
+      )}
+      {mode === "merge" && (
+        <TargetForm
+          app={app}
+          category={category}
+          exclude={new Set([category.id])}
+          onCancel={close}
+          onApply={async (target) => {
+            if (
+              target !== undefined &&
+              (await run((engine) => engine.mergeCategory(category.id, target)))
+            )
+              close();
+          }}
+        />
+      )}
+    </li>
+  );
+}
+
+function TargetForm({
+  app,
+  category,
+  exclude,
+  noneLabel,
+  onCancel,
+  onApply,
+}: {
+  app: ReadyState;
+  category: Category;
+  exclude: ReadonlySet<string>;
+  noneLabel?: string;
+  onCancel: () => void;
+  onApply: (target: string | undefined) => Promise<void>;
+}) {
+  const { t } = useLocale();
+  const [target, setTarget] = useState<string | undefined>(
+    noneLabel !== undefined ? category.parentId : undefined,
+  );
+  return (
+    <div className="mt-3 flex flex-col gap-3">
+      <CategoryPicker
+        categories={app.categories}
+        recent={[]}
+        kind={category.kind}
+        exclude={exclude}
+        value={target}
+        onChange={setTarget}
+        {...(noneLabel !== undefined ? { noneLabel } : {})}
+      />
+      <div className="flex gap-2">
+        <button
+          type="button"
+          className={PRIMARY}
+          disabled={noneLabel === undefined && target === undefined}
+          onClick={() => onApply(target)}
+        >
+          {t.categories_apply()}
+        </button>
+        <button type="button" className={BUTTON} onClick={onCancel}>
+          {t.categories_cancel()}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function Manager({ app }: { app: ReadyState }) {
   const { t } = useLocale();
   const [panel, setPanel] = useState<Panel>(undefined);
@@ -91,149 +245,17 @@ function Manager({ app }: { app: ReadyState }) {
         ) : (
           <ul className="flex flex-col gap-2">
             {rows.map((c) => (
-              <CategoryRow key={c.id} category={c} />
+              <CategoryRow
+                key={c.id}
+                category={c}
+                ctx={{ app, panel, setPanel, close, run, byId }}
+              />
             ))}
           </ul>
         )}
       </section>
     );
   };
-
-  function CategoryRow({ category }: { category: Category }) {
-    const uses = app.categoryUse[category.id] ?? 0;
-    const mode = typeof panel === "object" && panel.id === category.id ? panel.mode : undefined;
-    const depth = depthOf(category, byId);
-    return (
-      <li
-        className="rounded-xl border border-line bg-surface p-3"
-        style={{ marginInlineStart: `${depth * 1.25}rem` }}
-      >
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="min-w-0 flex-1 font-medium">{category.name}</span>
-          {mode === undefined && (
-            <>
-              <button
-                type="button"
-                className={BUTTON}
-                aria-label={`${t.categories_rename()}: ${category.name}`}
-                onClick={() => setPanel({ id: category.id, mode: "rename" })}
-              >
-                {t.categories_rename()}
-              </button>
-              <button
-                type="button"
-                className={BUTTON}
-                aria-label={`${t.categories_move()}: ${category.name}`}
-                onClick={() => setPanel({ id: category.id, mode: "move" })}
-              >
-                {t.categories_move()}
-              </button>
-              <button
-                type="button"
-                className={BUTTON}
-                aria-label={`${t.categories_merge()} ${category.name}`}
-                onClick={() => setPanel({ id: category.id, mode: "merge" })}
-              >
-                {t.categories_merge()}
-              </button>
-              {uses === 0 && (
-                <button
-                  type="button"
-                  className={BUTTON}
-                  aria-label={`${t.categories_delete()}: ${category.name}`}
-                  title={t.categories_delete_hint()}
-                  onClick={() => run((engine) => engine.deleteCategory(category.id))}
-                >
-                  {t.categories_delete()}
-                </button>
-              )}
-            </>
-          )}
-        </div>
-        {mode === undefined && uses > 0 && (
-          <p className="mt-1 text-sm text-ink-muted">{t.categories_in_use({ count: uses })}</p>
-        )}
-        {mode === "rename" && (
-          <RenameForm
-            initial={category.name}
-            onCancel={close}
-            onSave={async (name) => {
-              if (await run((engine) => engine.editCategory(category.id, { name }))) close();
-            }}
-          />
-        )}
-        {mode === "move" && (
-          <TargetForm
-            category={category}
-            exclude={withDescendants(category.id, app.categories)}
-            noneLabel={t.categories_top_level()}
-            onCancel={close}
-            onApply={async (target) => {
-              if (await run((engine) => engine.moveCategory(category.id, target))) close();
-            }}
-          />
-        )}
-        {mode === "merge" && (
-          <TargetForm
-            category={category}
-            exclude={new Set([category.id])}
-            onCancel={close}
-            onApply={async (target) => {
-              if (
-                target !== undefined &&
-                (await run((engine) => engine.mergeCategory(category.id, target)))
-              )
-                close();
-            }}
-          />
-        )}
-      </li>
-    );
-  }
-
-  function TargetForm({
-    category,
-    exclude,
-    noneLabel,
-    onCancel,
-    onApply,
-  }: {
-    category: Category;
-    exclude: ReadonlySet<string>;
-    noneLabel?: string;
-    onCancel: () => void;
-    onApply: (target: string | undefined) => Promise<void>;
-  }) {
-    const [target, setTarget] = useState<string | undefined>(
-      noneLabel !== undefined ? category.parentId : undefined,
-    );
-    return (
-      <div className="mt-3 flex flex-col gap-3">
-        <CategoryPicker
-          categories={app.categories}
-          recent={[]}
-          kind={category.kind}
-          exclude={exclude}
-          value={target}
-          onChange={setTarget}
-          {...(noneLabel !== undefined ? { noneLabel } : {})}
-        />
-        <div className="flex gap-2">
-          <button
-            type="button"
-            className={PRIMARY}
-            disabled={noneLabel === undefined && target === undefined}
-            onClick={() => onApply(target)}
-          >
-            {t.categories_apply()}
-          </button>
-          <button type="button" className={BUTTON} onClick={onCancel}>
-            {t.categories_cancel()}
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <Page title={t.nav_categories()}>
@@ -361,13 +383,7 @@ function NewCategoryForm({
   );
 }
 
-function TagsSection({
-  tags,
-  run,
-}: {
-  tags: readonly Tag[];
-  run: (change: Parameters<ReadyState["act"]>[0]) => Promise<boolean>;
-}) {
+function TagsSection({ tags, run }: { tags: readonly Tag[]; run: Run }) {
   const { t } = useLocale();
   const [name, setName] = useState("");
   const [renaming, setRenaming] = useState<string | undefined>(undefined);

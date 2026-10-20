@@ -37,18 +37,18 @@ test("build a Category tree, move, merge and delete, and keep Tags", async ({ pa
   await expect(expenses.getByRole("listitem")).toHaveText([/Food/, /Groceries/, /Eating out/]);
 
   // Move Groceries to the top level.
-  await page.getByRole("button", { name: "Move: Groceries" }).click();
+  await page.getByRole("button", { name: "Move Groceries" }).click();
   await page.getByRole("button", { name: "Top level" }).click();
   await page.getByRole("button", { name: "Apply" }).click();
   await expect(expenses.getByRole("listitem")).toHaveText([/Food/, /Groceries/, /Eating out/]);
 
   // Merge Eating out into Food, then delete the now-empty Groceries.
-  await page.getByRole("button", { name: "Merge into… Eating out" }).click();
+  await page.getByRole("button", { name: "Merge Eating out into…" }).click();
   await page.getByRole("button", { name: "Food", exact: true }).click();
   await page.getByRole("button", { name: "Apply" }).click();
   await expect(page.getByText("Eating out")).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Delete: Groceries" }).click();
+  await page.getByRole("button", { name: "Delete Groceries" }).click();
   await expect(page.getByText("Groceries")).toHaveCount(0);
 
   // Tags are flat, reused by name, and survive a reload.

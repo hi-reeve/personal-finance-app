@@ -180,7 +180,7 @@ export interface Engine {
   mergeCategory(id: string, intoId: string): Promise<void>;
   /** A merged Category answers with the Category it became. */
   getCategory(id: string): Promise<Category | undefined>;
-  /** Categories in creation order, parents before children. A cycle from concurrent moves is broken. */
+  /** Categories in creation order. A cycle from concurrent moves is broken. */
   listCategories(): Promise<Category[]>;
   /** Categories whose name contains `query` (any case), with the names from the top down to each. */
   searchCategories(
@@ -788,9 +788,8 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
         throw new Error("Categories can only merge with the same kind");
       const parents = effectiveParents();
       const ops: Op[] = [];
-      // Merging into its own descendant would make a cycle: lift that descendant out first.
-      if (isInside(intoId, id, parents))
-        ops.push(...opsFor("category", intoId, { parentId: parents.get(id) ?? "" }));
+      // Merging into its own descendant would make a cycle: that descendant goes to the top level.
+      if (isInside(intoId, id, parents)) ops.push(...opsFor("category", intoId, { parentId: "" }));
       ops.push(...opsFor("category", id, { mergedInto: intoId }));
       await commit(ops);
     },

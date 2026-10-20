@@ -163,7 +163,7 @@ describe("deleting and merging", () => {
     await expect(engine.mergeCategory(spend.id, spend.id)).rejects.toThrow();
   });
 
-  it("merging into its own descendant detaches that descendant to the source's place", async () => {
+  it("merging into its own descendant detaches that descendant to the top level", async () => {
     const { engine } = await device();
     const a = await engine.createCategory({ name: "A", kind: "expense" });
     const b = await engine.createCategory({ name: "B", kind: "expense", parentId: a.id });

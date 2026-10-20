@@ -87,15 +87,20 @@ export function CategoryPicker({
           </button>
         )}
         {needle === "" && recents.length > 0 && (
-          <section aria-label={t.picker_recent()}>
-            <h3 className="mb-1 text-sm font-medium text-ink-muted">{t.picker_recent()}</h3>
+          <section aria-labelledby={`${listId}-recent`}>
+            <h3 id={`${listId}-recent`} className="mb-1 text-sm font-medium text-ink-muted">
+              {t.picker_recent()}
+            </h3>
             <ul className="flex flex-col gap-1">{recents.map(option)}</ul>
           </section>
         )}
-        <section aria-label={t.picker_all()}>
-          {needle === "" && (
-            <h3 className="mb-1 text-sm font-medium text-ink-muted">{t.picker_all()}</h3>
-          )}
+        <section aria-labelledby={`${listId}-all`}>
+          <h3
+            id={`${listId}-all`}
+            className={needle === "" ? "mb-1 text-sm font-medium text-ink-muted" : "sr-only"}
+          >
+            {t.picker_all()}
+          </h3>
           {results.length === 0 ? (
             <p className="text-ink-muted">{t.picker_none_found()}</p>
           ) : (

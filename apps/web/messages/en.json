@@ -121,12 +121,11 @@
   "categories_merge": "Merge into…",
   "categories_delete": "Delete",
   "categories_delete_hint": "Children move up one level.",
-  "categories_in_use": "{count} lines use it. Merge it into another category to remove it.",
+  "categories_in_use": "Lines using it: {count}. Merge it into another category to remove it.",
   "categories_apply": "Apply",
   "categories_save": "Save",
   "categories_cancel": "Cancel",
   "categories_failed": "Could not save: {message}",
-  "category_balance_adjustment": "Balance adjustment",
   "picker_search": "Search categories",
   "picker_recent": "Recent",
   "picker_none_found": "No category matches.",
@@ -136,5 +135,9 @@
   "tags_add": "Add tag",
   "tags_name": "Tag name",
   "tags_rename": "Rename {name}",
-  "tags_delete": "Delete {name}"
+  "tags_delete": "Delete {name}",
+  "categories_rename_named": "Rename {name}",
+  "categories_move_named": "Move {name}",
+  "categories_merge_named": "Merge {name} into…",
+  "categories_delete_named": "Delete {name}"
 }

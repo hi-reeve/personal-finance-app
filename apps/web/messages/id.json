@@ -121,12 +121,11 @@
   "categories_merge": "Gabungkan ke…",
   "categories_delete": "Hapus",
   "categories_delete_hint": "Sub-kategori naik satu tingkat.",
-  "categories_in_use": "{count} baris memakainya. Gabungkan ke kategori lain untuk menghapusnya.",
+  "categories_in_use": "Baris yang memakainya: {count}. Gabungkan ke kategori lain untuk menghapusnya.",
   "categories_apply": "Terapkan",
   "categories_save": "Simpan",
   "categories_cancel": "Batal",
   "categories_failed": "Tidak dapat menyimpan: {message}",
-  "category_balance_adjustment": "Penyesuaian saldo",
   "picker_search": "Cari kategori",
   "picker_recent": "Terbaru",
   "picker_none_found": "Tidak ada kategori yang cocok.",
@@ -136,5 +135,9 @@
   "tags_add": "Tambah tag",
   "tags_name": "Nama tag",
   "tags_rename": "Ubah nama {name}",
-  "tags_delete": "Hapus {name}"
+  "tags_delete": "Hapus {name}",
+  "categories_rename_named": "Ubah nama {name}",
+  "categories_move_named": "Pindahkan {name}",
+  "categories_merge_named": "Gabungkan {name} ke…",
+  "categories_delete_named": "Hapus {name}"
 }

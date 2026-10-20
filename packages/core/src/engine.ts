@@ -4,12 +4,22 @@ import { newUuidV7 } from "./ids";
 import type { Entity, Op, OpValue } from "./ops";
 import { currencyCodes, type CurrencyCode } from "./format";
 import {
+  assertAccountColor,
+  assertAccountIcon,
   assertAccountKind,
   assertAmount,
   assertDate,
   assertTime,
+  type AccountColor,
+  type AccountIcon,
   type AccountKind,
 } from "./validate";
+
+/**
+ * The Category every balance adjustment is recorded in. A fixed id so every device agrees on it;
+ * the Categories feature seeds the matching record, and reports leave it out.
+ */
+export const BALANCE_ADJUSTMENT_CATEGORY = "balance-adjustment";
 
 export interface Line {
   id: string;
@@ -44,17 +54,34 @@ export interface Account {
   currency: CurrencyCode;
   /** Integer minor units of the Account's currency. */
   openingBalance: number;
+  icon?: AccountIcon;
+  color?: AccountColor;
+  /** Counts against the user in summaries. On by default for a credit card. */
+  isLiability: boolean;
+  /** Epoch ms (UTC) when it was archived; absent while it is in use. */
+  archivedAt?: number;
   /** Epoch ms (UTC) when it was created. */
   createdAt: number;
 }
 
-export type NewAccount = Omit<Account, "id" | "createdAt">;
+export type NewAccount = Omit<Account, "id" | "createdAt" | "archivedAt" | "isLiability"> & {
+  isLiability?: boolean;
+};
+
+/** What can change on an Account. Currency locks once the Account has Transactions. */
+export type AccountPatch = Partial<Omit<NewAccount, "openingBalance" | "icon" | "color">> & {
+  /** An empty string clears it. */
+  icon?: AccountIcon | "";
+  color?: AccountColor | "";
+};
 
 /** Synced settings. Empty until first-run setup completes. */
 export interface Settings {
   baseCurrency?: CurrencyCode;
   /** Epoch ms (UTC) when setup finished. */
   setupAt?: number;
+  /** The Account Add starts on. Absent when none is chosen or it was archived or deleted. */
+  defaultAccountId?: string;
 }
 
 export interface NewLine {
@@ -98,8 +125,22 @@ export interface Engine {
    */
   completeSetup(input: { baseCurrency: CurrencyCode; account: NewAccount }): Promise<Account>;
   createAccount(input: NewAccount): Promise<Account>;
-  /** Accounts, oldest first. */
+  /** Accounts that were not deleted, archived ones included, oldest first. */
   listAccounts(): Promise<Account[]>;
+  editAccount(id: string, patch: AccountPatch): Promise<Account>;
+  /** Opening balance plus every live Transaction on the Account. */
+  getBalance(accountId: string): Promise<number>;
+  /**
+   * Records a Transaction in the Balance adjustment Category that brings the balance to `target`,
+   * so the books match the bank without rewriting history.
+   */
+  adjustBalance(accountId: string, input: { target: number; date: string }): Promise<Transaction>;
+  /** Removes an Account with no history. An Account with history can only be archived. */
+  deleteAccount(id: string): Promise<void>;
+  archiveAccount(id: string): Promise<void>;
+  unarchiveAccount(id: string): Promise<void>;
+  /** Pass `undefined` to clear it. */
+  setDefaultAccount(id: string | undefined): Promise<void>;
   /** Live Transactions, oldest date first. */
   listTransactions(): Promise<Transaction[]>;
   /** Every op this device holds, to send to another device. */
@@ -112,7 +153,7 @@ type Fields = Map<string, { value: OpValue; hlc: Hlc }>;
 
 const TRANSACTION_FIELDS = ["accountId", "date", "time", "payee", "note"] as const;
 const LINE_FIELDS = ["categoryId", "amount", "itemName"] as const;
-const ACCOUNT_FIELDS = ["name", "kind", "currency", "openingBalance"] as const;
+const ACCOUNT_FIELDS = ["name", "kind", "currency", "openingBalance", "icon", "color"] as const;
 const SETTINGS_ID = "settings";
 
 const byId = (a: { id: string }, b: { id: string }) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
@@ -251,17 +292,57 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
     assertAccountKind(input.kind);
     assertCurrency(input.currency);
     assertAmount(input.openingBalance);
+    if (input.icon !== undefined) assertAccountIcon(input.icon);
+    if (input.color !== undefined) assertAccountColor(input.color);
     return { ...input, name };
+  }
+
+  function isLiveAccount(id: string): boolean {
+    const fields = accounts.get(id);
+    return fields !== undefined && !fields.has("deletedAt");
+  }
+
+  function assertAccount(id: string) {
+    if (!isLiveAccount(id)) throw new Error(`Account ${id} does not exist or was deleted`);
+  }
+
+  function archivedAt(fields: Fields): number | undefined {
+    const at = Number(fields.get("archivedAt")?.value ?? 0);
+    return at > 0 ? at : undefined;
+  }
+
+  /** A Transaction may not be added to an Account known to be archived or deleted. */
+  function assertOpenForTransactions(id: string) {
+    const fields = accounts.get(id);
+    if (fields === undefined) return;
+    if (fields.has("deletedAt")) throw new Error(`Account ${id} was deleted`);
+    if (archivedAt(fields) !== undefined) throw new Error(`Account ${id} is archived`);
+  }
+
+  function liveTransactionsOn(accountId: string): Transaction[] {
+    return [...transactions.keys()].flatMap((id) => {
+      const tx = readTransaction(id);
+      return tx !== undefined && tx.accountId === accountId ? [tx] : [];
+    });
   }
 
   function readAccount(id: string): Account {
     const f = accounts.get(id)!;
+    const kind = text(f, "kind") as AccountKind;
+    const icon = (text(f, "icon") || undefined) as AccountIcon | undefined;
+    const color = (text(f, "color") || undefined) as AccountColor | undefined;
+    const archived = archivedAt(f);
+    const liability = f.get("isLiability")?.value;
     return {
       id,
       name: text(f, "name")!,
-      kind: text(f, "kind") as AccountKind,
+      kind,
       currency: text(f, "currency") as CurrencyCode,
       openingBalance: Number(f.get("openingBalance")!.value),
+      ...(icon !== undefined ? { icon } : {}),
+      ...(color !== undefined ? { color } : {}),
+      isLiability: liability === undefined ? kind === "credit-card" : Number(liability) === 1,
+      ...(archived !== undefined ? { archivedAt: archived } : {}),
       createdAt: Number(f.get("createdAt")!.value),
     };
   }
@@ -270,7 +351,11 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
     const id = newUuidV7(clock, random);
     return {
       id,
-      ops: opsFor("account", id, { ...pick(input, ACCOUNT_FIELDS), createdAt: clock.now() }),
+      ops: opsFor("account", id, {
+        ...pick(input, ACCOUNT_FIELDS),
+        ...(input.isLiability !== undefined ? { isLiability: input.isLiability ? 1 : 0 } : {}),
+        createdAt: clock.now(),
+      }),
     };
   }
 
@@ -279,9 +364,16 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
     if (f === undefined) return {};
     const baseCurrency = text(f, "baseCurrency") as CurrencyCode | undefined;
     const setupAt = f.get("setupAt")?.value;
+    const chosen = text(f, "defaultAccountId");
+    const defaultOk =
+      chosen !== undefined &&
+      chosen !== "" &&
+      isLiveAccount(chosen) &&
+      archivedAt(accounts.get(chosen)!) === undefined;
     return {
       ...(baseCurrency !== undefined ? { baseCurrency } : {}),
       ...(setupAt !== undefined ? { setupAt: Number(setupAt) } : {}),
+      ...(defaultOk ? { defaultAccountId: chosen } : {}),
     };
   }
 
@@ -297,24 +389,33 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
     >;
   }
 
-  return {
-    async recordTransaction(input) {
-      validateTransactionFields(input);
-      if (input.lines.length === 0) throw new Error("A Transaction needs at least one Line");
-      for (const line of input.lines) assertAmount(line.amount);
+  function balanceOf(accountId: string): number {
+    assertAccount(accountId);
+    const opening = readAccount(accountId).openingBalance;
+    return liveTransactionsOn(accountId).reduce((sum, tx) => sum + tx.total, opening);
+  }
 
-      const id = newUuidV7(clock, random);
-      const ops = opsFor("transaction", id, {
-        ...pick(input, TRANSACTION_FIELDS),
-        createdAt: clock.now(),
-      });
-      for (const line of input.lines) {
-        const lineId = newUuidV7(clock, random);
-        ops.push(...opsFor("line", lineId, { transactionId: id, ...pick(line, LINE_FIELDS) }));
-      }
-      await commit(ops);
-      return readTransaction(id)!;
-    },
+  async function record(input: NewTransaction): Promise<Transaction> {
+    validateTransactionFields(input);
+    assertOpenForTransactions(input.accountId);
+    if (input.lines.length === 0) throw new Error("A Transaction needs at least one Line");
+    for (const line of input.lines) assertAmount(line.amount);
+
+    const id = newUuidV7(clock, random);
+    const ops = opsFor("transaction", id, {
+      ...pick(input, TRANSACTION_FIELDS),
+      createdAt: clock.now(),
+    });
+    for (const line of input.lines) {
+      const lineId = newUuidV7(clock, random);
+      ops.push(...opsFor("line", lineId, { transactionId: id, ...pick(line, LINE_FIELDS) }));
+    }
+    await commit(ops);
+    return readTransaction(id)!;
+  }
+
+  return {
+    recordTransaction: record,
     async editTransaction(id, patch) {
       assertLive(id);
       validateTransactionFields(patch);
@@ -340,7 +441,10 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
       const checked = checkAccount(account);
       const created = accountOps(checked);
       const setupAt = clock.now();
-      await commit([...opsFor("settings", SETTINGS_ID, { baseCurrency, setupAt }), ...created.ops]);
+      await commit([
+        ...opsFor("settings", SETTINGS_ID, { baseCurrency, setupAt, defaultAccountId: created.id }),
+        ...created.ops,
+      ]);
       return readAccount(created.id);
     },
     async createAccount(input) {
@@ -350,8 +454,61 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
     },
     async listAccounts() {
       return [...accounts.keys()]
+        .filter(isLiveAccount)
         .map(readAccount)
         .sort((a, b) => (a.createdAt === b.createdAt ? byId(a, b) : a.createdAt - b.createdAt));
+    },
+    async editAccount(id, patch) {
+      assertAccount(id);
+      const current = readAccount(id);
+      const { isLiability, icon, color, ...fields } = patch;
+      const merged = checkAccount({ ...current, ...fields });
+      if (icon) assertAccountIcon(icon);
+      if (color) assertAccountColor(color);
+      if (merged.currency !== current.currency && liveTransactionsOn(id).length > 0)
+        throw new Error("The currency cannot change once the Account has Transactions");
+      await commit(
+        opsFor("account", id, {
+          ...pick(merged, ["name", "kind", "currency"] as const),
+          ...(icon !== undefined ? { icon } : {}),
+          ...(color !== undefined ? { color } : {}),
+          ...(isLiability !== undefined ? { isLiability: isLiability ? 1 : 0 } : {}),
+        }),
+      );
+      return readAccount(id);
+    },
+    getBalance: async (accountId) => balanceOf(accountId),
+    async adjustBalance(accountId, { target, date }) {
+      assertAmount(target);
+      const difference = target - balanceOf(accountId);
+      if (difference === 0) throw new Error("The balance is already correct");
+      return record({
+        accountId,
+        date,
+        lines: [{ categoryId: BALANCE_ADJUSTMENT_CATEGORY, amount: difference }],
+      });
+    },
+    async deleteAccount(id) {
+      assertAccount(id);
+      if (liveTransactionsOn(id).length > 0)
+        throw new Error("An Account with history can only be archived");
+      await commit(opsFor("account", id, { deletedAt: clock.now() }));
+    },
+    async archiveAccount(id) {
+      assertAccount(id);
+      await commit(opsFor("account", id, { archivedAt: clock.now() }));
+    },
+    async unarchiveAccount(id) {
+      assertAccount(id);
+      await commit(opsFor("account", id, { archivedAt: 0 }));
+    },
+    async setDefaultAccount(id) {
+      if (id !== undefined) {
+        assertAccount(id);
+        if (archivedAt(accounts.get(id)!) !== undefined)
+          throw new Error("An archived Account cannot be the default");
+      }
+      await commit(opsFor("settings", SETTINGS_ID, { defaultAccountId: id ?? "" }));
     },
     async listTransactions() {
       const live = [...transactions.keys()].flatMap((id) => readTransaction(id) ?? []);

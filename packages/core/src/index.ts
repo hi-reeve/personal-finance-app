@@ -5,10 +5,19 @@ export {
   type BannerInput,
   type BannerLevel,
 } from "./banner";
-export { ACCOUNT_KINDS, type AccountKind } from "./validate";
 export {
+  ACCOUNT_COLORS,
+  ACCOUNT_ICONS,
+  ACCOUNT_KINDS,
+  type AccountColor,
+  type AccountIcon,
+  type AccountKind,
+} from "./validate";
+export {
+  BALANCE_ADJUSTMENT_CATEGORY,
   createEngine,
   type Account,
+  type AccountPatch,
   type Engine,
   type EngineOptions,
   type Line,
@@ -25,6 +34,7 @@ export {
   currencyCodes,
   formatDate,
   formatMoney,
+  parseMoney,
   type CurrencyCode,
   type Language,
   type MoneyFormatOptions,

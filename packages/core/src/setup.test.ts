@@ -32,7 +32,11 @@ describe("first run", () => {
 
     expect(account).toMatchObject({ ...wallet, createdAt: NOW });
     expect(account.id).toMatch(UUID_V7);
-    expect(engine.getSettings()).toEqual({ baseCurrency: "IDR", setupAt: NOW });
+    expect(engine.getSettings()).toEqual({
+      baseCurrency: "IDR",
+      setupAt: NOW,
+      defaultAccountId: account.id,
+    });
     expect(await engine.listAccounts()).toEqual([account]);
   });
 
@@ -44,7 +48,11 @@ describe("first run", () => {
     });
 
     const restarted = await device(first.store, 2);
-    expect(restarted.engine.getSettings()).toEqual({ baseCurrency: "USD", setupAt: NOW });
+    expect(restarted.engine.getSettings()).toEqual({
+      baseCurrency: "USD",
+      setupAt: NOW,
+      defaultAccountId: account.id,
+    });
     expect(await restarted.engine.listAccounts()).toEqual([account]);
   });
 

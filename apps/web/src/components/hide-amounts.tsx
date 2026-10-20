@@ -1,3 +1,4 @@
+import { m } from "../paraglide/messages.js";
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 
 const STORAGE_KEY = "pfa.hideAmounts";
@@ -56,7 +57,15 @@ export function HideAmountsToggle() {
       onClick={toggle}
       className="min-h-11 min-w-11 rounded-lg border border-line bg-surface px-3 text-ink"
     >
-      Hide amounts
+      {m.hide_amounts()}
     </button>
   );
+}
+
+const DOTS = "••••••";
+
+/** Formats an amount for plain text, or dots while amounts are hidden. */
+export function useMoneyText(): (formatted: string) => string {
+  const { hidden } = useHideAmounts();
+  return (formatted) => (hidden ? DOTS : formatted);
 }

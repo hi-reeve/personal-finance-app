@@ -4,7 +4,14 @@ import { newUuidV7 } from "./ids";
 import type { Entity, Op, OpValue } from "./ops";
 import { currencyCodes, type CurrencyCode } from "./format";
 import { convertMinor, normalizeRate } from "./rates";
-import { spendingByCategory, type SpendingByCategory, type SpendingQuery } from "./reports";
+import {
+  dailyTotals,
+  spendingByCategory,
+  type DailyTotals,
+  type SpendingInput,
+  type SpendingByCategory,
+  type SpendingQuery,
+} from "./reports";
 import {
   assertAccountColor,
   assertAccountIcon,
@@ -305,6 +312,8 @@ export interface Engine {
    * currency "as recorded". See `spendingByCategory` for the counting rules.
    */
   spendingByCategory(query: SpendingQuery): Promise<SpendingByCategory>;
+  /** The same counting rules, day by day over the period. */
+  dailyTotals(query: SpendingQuery): Promise<DailyTotals>;
   /** Live Transactions, oldest date first. A Transfer's fee is included; the Transfer is not. */
   listTransactions(): Promise<Transaction[]>;
   /** Every op this device holds, to send to another device. */
@@ -931,6 +940,19 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
     >;
   }
 
+  function reportInput(query: SpendingQuery): SpendingInput {
+    return {
+      ...query,
+      base: readSettings().baseCurrency,
+      transactions: [...transactions.keys()].flatMap((id) => readTransaction(id) ?? []),
+      accountCurrency: new Map(
+        [...accounts.entries()].map(([id, f]) => [id, text(f, "currency") as CurrencyCode]),
+      ),
+      categories: allCategories(),
+      excluded: new Set([BALANCE_ADJUSTMENT_CATEGORY]),
+    };
+  }
+
   function balanceOf(accountId: string): number {
     assertAccount(accountId);
     const opening = readAccount(accountId).openingBalance;
@@ -1293,18 +1315,8 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
       const converted = tx.lines.map((line) => convertMinor(line.amount, tx.rate!, currency, base));
       return { lines: converted, total: converted.reduce((sum, amount) => sum + amount, 0) };
     },
-    async spendingByCategory(query) {
-      return spendingByCategory({
-        ...query,
-        base: readSettings().baseCurrency,
-        transactions: [...transactions.keys()].flatMap((id) => readTransaction(id) ?? []),
-        accountCurrency: new Map(
-          [...accounts.entries()].map(([id, f]) => [id, text(f, "currency") as CurrencyCode]),
-        ),
-        categories: allCategories(),
-        excluded: new Set([BALANCE_ADJUSTMENT_CATEGORY]),
-      });
-    },
+    spendingByCategory: async (query) => spendingByCategory(reportInput(query)),
+    dailyTotals: async (query) => dailyTotals(reportInput(query)),
     async listTransactions() {
       const live = [...transactions.keys()].flatMap((id) => readTransaction(id) ?? []);
       return live.sort((a, b) => (a.date === b.date ? byId(a, b) : a.date < b.date ? -1 : 1));

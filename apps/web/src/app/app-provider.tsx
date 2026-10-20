@@ -64,7 +64,17 @@ export interface Snapshot {
   tags: Tag[];
 }
 
-export type ReadyState = { status: "ready"; completeSetup: CompleteSetup; act: Act } & Snapshot;
+/** Asks the engine a question without changing anything, such as a report. */
+type Read = <T>(question: (engine: Engine) => Promise<T>) => Promise<T>;
+
+export type ReadyState = {
+  status: "ready";
+  completeSetup: CompleteSetup;
+  act: Act;
+  read: Read;
+  /** Goes up after every change, so anything computed from the data knows to ask again. */
+  version: number;
+} & Snapshot;
 
 export type AppState = { status: "loading" } | { status: "error"; message: string } | ReadyState;
 
@@ -122,22 +132,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const engine = await openEngine();
     await engine.completeSetup(input);
     const next = await snapshot(engine);
-    setState((current) => (current.status === "ready" ? { ...current, ...next } : current));
+    setState((current) =>
+      current.status === "ready" ? { ...current, ...next, version: current.version + 1 } : current,
+    );
   }, []);
 
   const act = useCallback<Act>(async (change) => {
     const engine = await openEngine();
     await change(engine);
     const next = await snapshot(engine);
-    setState((current) => (current.status === "ready" ? { ...current, ...next } : current));
+    setState((current) =>
+      current.status === "ready" ? { ...current, ...next, version: current.version + 1 } : current,
+    );
   }, []);
+
+  const read = useCallback<Read>(async (question) => question(await openEngine()), []);
 
   useEffect(() => {
     let live = true;
     openEngine()
       .then(snapshot)
       .then(
-        (next) => live && setState({ status: "ready", completeSetup, act, ...next }),
+        (next) =>
+          live && setState({ status: "ready", completeSetup, act, read, version: 0, ...next }),
         (error: unknown) =>
           live &&
           setState({
@@ -148,7 +165,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => {
       live = false;
     };
-  }, [completeSetup, act]);
+  }, [completeSetup, act, read]);
 
   return <AppContext.Provider value={state}>{children}</AppContext.Provider>;
 }

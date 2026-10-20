@@ -51,11 +51,11 @@ test("Home answers where the money went, and every number has a text and a table
   await expect(top.getByRole("listitem")).toHaveCount(2);
   await expect(top.getByRole("listitem").first()).toContainText("Food");
   await expect(top.getByRole("listitem").first()).toContainText("66.7%");
-  await expect(top).toContainText("2 categories. The biggest is Food at 66.7% ($100.00).");
+  await expect(top).toContainText("The biggest of 2 is Food at 66.7% ($100.00).");
 
   // The daily chart is described in words, and a table lists the days.
   const daily = page.getByRole("region", { name: "Spending by day" });
-  await expect(daily.getByRole("img", { name: /^\$150\.00 over \d+ days\./ })).toBeVisible();
+  await expect(daily.getByRole("img", { name: /^Total \$150\.00\./ })).toBeVisible();
   await daily.getByText("Show as table").click();
   await expect(daily.getByRole("table")).toBeVisible();
 

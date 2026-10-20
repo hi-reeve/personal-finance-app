@@ -52,7 +52,7 @@ describe("DailyChart", () => {
     mount(<DailyChart daily={daily} currency="IDR" />);
     const chart = document.querySelector("svg")!;
     expect(chart.getAttribute("aria-label")).toBe(
-      "Rp 305,000 over 4 days. The biggest day was 7 Oct: Rp 200,000.",
+      "Total Rp 305,000. The biggest day was 7 Oct: Rp 200,000.",
     );
     // The summary is also plain text for anyone who cannot use the picture.
     expect(screen.getAllByText(chart.getAttribute("aria-label")!).length).toBeGreaterThan(0);
@@ -86,6 +86,26 @@ describe("DailyChart", () => {
   });
 });
 
+describe("hidden amounts and the shape of the chart", () => {
+  const heights = () =>
+    [...document.querySelectorAll("svg rect")].map((r) => Number(r.getAttribute("height")));
+
+  it("draws columns in proportion to the amounts while they are shown", () => {
+    mount(<DailyChart daily={daily} currency="IDR" />);
+    const [first, zero, second, third] = heights();
+    expect(zero).toBe(0);
+    expect(second!).toBeGreaterThan(first!);
+    expect(first!).toBeGreaterThan(third!);
+  });
+
+  it("draws every day that had spending at one height while they are hidden", () => {
+    mount(<DailyChart daily={daily} currency="IDR" />, true);
+    const [first, zero, second, third] = heights();
+    expect(zero).toBe(0);
+    expect(new Set([first, second, third]).size).toBe(1);
+  });
+});
+
 describe("CategoryBars", () => {
   it("ranks Categories with their amount and share in words, and lists them all in a table", () => {
     mount(<CategoryBars spending={spending} currency="IDR" />);
@@ -97,9 +117,7 @@ describe("CategoryBars", () => {
       expect.stringContaining("Deleted category"),
     ]);
     expect(items[0]!.textContent).toContain("91.8%");
-    expect(
-      screen.getByText("3 categories. The biggest is Food at 91.8% (Rp 280,000)."),
-    ).toBeTruthy();
+    expect(screen.getByText("The biggest of 3 is Food at 91.8% (Rp 280,000).")).toBeTruthy();
 
     const table = screen.getByRole("table", { name: "Top categories" });
     expect(within(table).getAllByRole("row")).toHaveLength(4);

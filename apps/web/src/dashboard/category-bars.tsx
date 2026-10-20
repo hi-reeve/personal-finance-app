@@ -1,7 +1,7 @@
 import type { CurrencyCode, SpendingByCategory } from "@pfa/core";
 import { formatPercent } from "../app/percent";
 import { Amount } from "../components/amount";
-import { useMoneyText } from "../components/hide-amounts";
+import { useHideAmounts, useMoneyText } from "../components/hide-amounts";
 import { useLocale } from "../components/locale";
 
 const TOP = 5;
@@ -19,6 +19,7 @@ export function CategoryBars({
 }) {
   const { t, money, numberFormat } = useLocale();
   const text = useMoneyText();
+  const { hidden } = useHideAmounts();
   const all = spending.categories.filter((c) => c.total > 0);
   const shown = all.slice(0, TOP);
   const name = (c: (typeof all)[number]) => c.name ?? t.top_missing();
@@ -52,7 +53,8 @@ export function CategoryBars({
                 <div className="h-2 rounded-full bg-line" aria-hidden="true">
                   <div
                     className="h-2 rounded-full bg-expense"
-                    style={{ width: `${Math.max(c.share / 100, 1)}%` }}
+                    // Bars are all the same length while amounts are hidden, so length reveals nothing.
+                    style={{ width: `${hidden ? 50 : Math.max(c.share / 100, 1)}%` }}
                   />
                 </div>
               </li>

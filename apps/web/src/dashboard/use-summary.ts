@@ -68,5 +68,8 @@ export function useSummary(app: ReadyState, period: Period): SummaryState {
     };
   }, [read, version, base, period.from, period.to]);
 
-  return state;
+  // Figures for another month are never shown under this month's name.
+  return state.status === "ready" && state.data.period.from !== period.from
+    ? { status: "loading" }
+    : state;
 }

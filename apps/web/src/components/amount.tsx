@@ -12,7 +12,7 @@ interface AmountProps {
 
 const LABEL: Record<Direction, string> = { income: "Income", expense: "Expense", neutral: "" };
 const SIGN: Record<Direction, string> = { income: "+", expense: "−", neutral: "" };
-const HIDDEN_DOTS = "••••••";
+export const HIDDEN_DOTS = "••••••";
 
 function DirectionIcon({ direction }: { direction: Exclude<Direction, "neutral"> }) {
   return (

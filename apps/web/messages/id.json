@@ -246,7 +246,7 @@
   "card_spending": "Pengeluaran",
   "card_net": "Bersih",
   "daily_heading": "Pengeluaran per hari",
-  "daily_summary": "{total} selama {days} hari. Hari terbesar adalah {peak_day}: {peak}.",
+  "daily_summary": "Total {total}. Hari terbesar adalah {peak_day}: {peak}.",
   "daily_summary_none": "Tidak ada pengeluaran pada hari mana pun di periode ini.",
   "chart_show_table": "Tampilkan sebagai tabel",
   "chart_day": "Hari",
@@ -254,9 +254,9 @@
   "chart_category": "Kategori",
   "chart_share": "Bagian",
   "top_heading": "Kategori teratas",
-  "top_summary": "{count} kategori. Yang terbesar adalah {name} sebesar {share}% ({amount}).",
+  "top_summary": "Yang terbesar dari {count} adalah {name} sebesar {share}% ({amount}).",
   "top_none": "Belum ada pengeluaran untuk diurutkan.",
   "top_missing": "Kategori terhapus",
-  "skipped_note": "{count} baris tidak punya kurs dan tidak dihitung.",
+  "skipped_note": "Baris yang tidak dihitung karena tidak ada kurs: {count}.",
   "chart_days_note": "Hari tanpa pengeluaran tidak ditampilkan."
 }

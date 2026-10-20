@@ -1,3 +1,4 @@
+import { formatPercent } from "../app/percent";
 import { Amount } from "../components/amount";
 import { useMoneyText } from "../components/hide-amounts";
 import { useLocale } from "../components/locale";
@@ -7,7 +8,7 @@ import type { SummaryData } from "./use-summary";
 
 /** The headline: what was spent, and how that compares with the month before. */
 function Hero({ data }: { data: SummaryData }) {
-  const { t, money, month } = useLocale();
+  const { t, money, month, numberFormat } = useLocale();
   const text = useMoneyText();
   const spent = data.spending.total;
   const before = data.previousSpending;
@@ -15,17 +16,22 @@ function Hero({ data }: { data: SummaryData }) {
   const previous = month(data.previous.from);
   if (spent <= 0 && data.spending.categories.length === 0)
     return <p className="text-lg font-medium">{t.hero_none({ period })}</p>;
-  const percent = before > 0 ? Math.round((Math.abs(spent - before) / before) * 100) : undefined;
+  const change =
+    before > 0
+      ? formatPercent(Math.round((Math.abs(spent - before) * 10_000) / before), numberFormat)
+      : undefined;
+  // A change that rounds to nothing reads as the same.
+  const comparison =
+    change === undefined
+      ? ""
+      : change === "0" || spent === before
+        ? t.hero_same({ previous })
+        : spent < before
+          ? t.hero_less({ percent: change, previous })
+          : t.hero_more({ percent: change, previous });
   return (
     <p className="text-lg font-medium">
-      {t.hero_spent({ period, amount: text(money(spent, data.currency)) })}{" "}
-      {percent === undefined
-        ? ""
-        : spent < before
-          ? t.hero_less({ percent, previous })
-          : spent > before
-            ? t.hero_more({ percent, previous })
-            : t.hero_same({ previous })}
+      {t.hero_spent({ period, amount: text(money(spent, data.currency)) })} {comparison}
     </p>
   );
 }

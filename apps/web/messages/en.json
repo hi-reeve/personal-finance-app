@@ -164,5 +164,16 @@
   "category_missing": "Deleted category",
   "activity_edit_button": "Edit",
   "activity_delete_button": "Delete",
-  "tx_need_date": "Choose a date."
+  "tx_need_date": "Choose a date.",
+  "tx_line": "Line {n}",
+  "tx_item": "Item name",
+  "tx_no_category": "No category yet",
+  "tx_change": "Change",
+  "tx_change_category": "Change category of line {n}",
+  "tx_remove": "Remove",
+  "tx_remove_line": "Remove line {n}",
+  "tx_split": "Split into lines",
+  "tx_add_line": "Add line",
+  "tx_total": "Total",
+  "tx_mixed_kinds": "All lines must be the same kind: all spending or all income."
 }

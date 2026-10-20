@@ -164,5 +164,16 @@
   "category_missing": "Kategori terhapus",
   "activity_edit_button": "Ubah",
   "activity_delete_button": "Hapus",
-  "tx_need_date": "Pilih tanggal."
+  "tx_need_date": "Pilih tanggal.",
+  "tx_line": "Baris {n}",
+  "tx_item": "Nama barang",
+  "tx_no_category": "Belum ada kategori",
+  "tx_change": "Ubah",
+  "tx_change_category": "Ubah kategori baris {n}",
+  "tx_remove": "Hapus",
+  "tx_remove_line": "Hapus baris {n}",
+  "tx_split": "Pisah menjadi baris",
+  "tx_add_line": "Tambah baris",
+  "tx_total": "Total",
+  "tx_mixed_kinds": "Semua baris harus sejenis: semua pengeluaran atau semua pemasukan."
 }

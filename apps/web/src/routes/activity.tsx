@@ -7,7 +7,7 @@ import {
   type Transfer,
 } from "@pfa/core";
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 import { useActivityFilter } from "../app/activity-filter-state";
 import { useApp, type ReadyState } from "../app/app-provider";
 import { ActivityFilters } from "../components/activity-filters";
@@ -69,26 +69,49 @@ function List({ app }: { app: ReadyState }) {
   const badAmount = {
     min: draft.min.trim() !== "" && min === undefined,
     max: draft.max.trim() !== "" && max === undefined,
+    order: min !== undefined && max !== undefined && min > max,
   };
-  const filter: ActivityFilter = {
-    ...(draft.text.trim() !== "" ? { text: draft.text } : {}),
-    ...(draft.from !== "" ? { from: draft.from } : {}),
-    ...(draft.to !== "" ? { to: draft.to } : {}),
-    ...(draft.accountIds.length > 0 ? { accountIds: draft.accountIds } : {}),
-    ...(draft.categoryId !== undefined ? { categoryIds: [draft.categoryId] } : {}),
-    ...(draft.tagIds.length > 0 ? { tagIds: draft.tagIds } : {}),
-    ...(draft.kind !== "all" ? { kind: draft.kind } : {}),
-    ...(min !== undefined ? { minAmount: min } : {}),
-    ...(max !== undefined ? { maxAmount: max } : {}),
-  };
-  const filterKey = JSON.stringify(filter);
+  // Typing stays responsive on a long list: the list catches up when the browser is idle.
+  const text = useDeferredValue(draft.text);
+  // Choices whose Account, Category or Tag has since gone are dropped, not left to empty the list.
+  const accountIds = draft.accountIds.filter((id) => app.accounts.some((a) => a.id === id));
+  const tagIds = draft.tagIds.filter((id) => app.tags.some((tag) => tag.id === id));
+  const categoryId = app.categories.some((c) => c.id === draft.categoryId)
+    ? draft.categoryId
+    : undefined;
+  const filter = useMemo<ActivityFilter>(
+    () => ({
+      ...(text.trim() !== "" ? { text } : {}),
+      ...(draft.from !== "" ? { from: draft.from } : {}),
+      ...(draft.to !== "" ? { to: draft.to } : {}),
+      ...(accountIds.length > 0 ? { accountIds } : {}),
+      ...(categoryId !== undefined ? { categoryIds: [categoryId] } : {}),
+      ...(tagIds.length > 0 ? { tagIds } : {}),
+      ...(draft.kind !== "all" ? { kind: draft.kind } : {}),
+      ...(min !== undefined ? { minAmount: min } : {}),
+      ...(max !== undefined ? { maxAmount: max } : {}),
+    }),
+    // The lists are rebuilt each render; their contents are what matters.
+    [
+      text,
+      draft.from,
+      draft.to,
+      draft.kind,
+      accountIds.join(),
+      tagIds.join(),
+      categoryId,
+      min,
+      max,
+    ],
+  );
   const entries = useMemo(
     () => filterActivity(everything, filter, { categories: app.categories }),
-    [everything, filterKey, app.categories],
+    [everything, filter, app.categories],
   );
-  // Large lists render a page at a time; any change to the filter starts again at the first page.
-  const [shown, setShown] = useState(PAGE);
-  useEffect(() => setShown(PAGE), [filterKey]);
+  // Large lists render a page at a time. The count belongs to one filter, so a new filter starts
+  // again at the first page with no extra render.
+  const [paging, setPaging] = useState({ filter, count: PAGE });
+  const shown = paging.filter === filter ? paging.count : PAGE;
   const active = Object.keys(filter).length;
 
   async function remove(id: string, kind: "transaction" | "transfer") {
@@ -111,11 +134,11 @@ function List({ app }: { app: ReadyState }) {
         </p>
       )}
       <ActivityFilters app={app} active={active} badAmount={badAmount} />
-      {active > 0 && (
-        <p className="text-sm text-ink-muted" aria-live="polite">
-          {t.filters_results({ shown: Math.min(shown, entries.length), total: entries.length })}
-        </p>
-      )}
+      <p className="min-h-5 text-sm text-ink-muted" aria-live="polite">
+        {active > 0
+          ? t.filters_results({ shown: Math.min(shown, entries.length), total: entries.length })
+          : ""}
+      </p>
       {entries.length === 0 ? (
         <p className="text-ink-muted">
           {everything.length === 0 ? t.activity_empty() : t.filters_none()}
@@ -237,7 +260,11 @@ function List({ app }: { app: ReadyState }) {
         </ul>
       )}
       {entries.length > shown && (
-        <button type="button" className={BUTTON} onClick={() => setShown((n) => n + PAGE)}>
+        <button
+          type="button"
+          className={BUTTON}
+          onClick={() => setPaging({ filter, count: shown + PAGE })}
+        >
           {t.filters_show_more()}
         </button>
       )}

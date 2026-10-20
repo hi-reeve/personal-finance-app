@@ -1,5 +1,4 @@
 import type { ActivityKind } from "@pfa/core";
-import { useId } from "react";
 import { useActivityFilter } from "../app/activity-filter-state";
 import type { ReadyState } from "../app/app-provider";
 import { CategoryPicker } from "./category-picker";
@@ -22,11 +21,10 @@ export function ActivityFilters({
   /** How many filters are set, for the toggle label. */
   active: number;
   /** Which amount box holds something that is not an amount. */
-  badAmount: { min: boolean; max: boolean };
+  badAmount: { min: boolean; max: boolean; order: boolean };
 }) {
   const { t, money } = useLocale();
   const { draft, update, clear } = useActivityFilter();
-  const panelId = useId();
   const example = money(150_000, app.settings.baseCurrency ?? "USD").replace(/^[^\d-]+/, "");
   const kindLabel = (k: ActivityKind | "all") =>
     k === "all"
@@ -52,17 +50,13 @@ export function ActivityFilters({
           type="button"
           className={`${BUTTON} shrink-0`}
           aria-expanded={draft.open}
-          aria-controls={panelId}
           onClick={() => update({ open: !draft.open })}
         >
           {active > 0 ? t.filters_toggle_count({ count: active }) : t.filters_toggle()}
         </button>
       </div>
       {draft.open && (
-        <div
-          id={panelId}
-          className="flex flex-col gap-4 rounded-xl border border-line bg-surface p-4"
-        >
+        <div className="flex flex-col gap-4 rounded-xl border border-line bg-surface p-4">
           <div className="grid grid-cols-2 gap-3">
             <label className="flex flex-col gap-1">
               <span>{t.filters_from()}</span>
@@ -106,6 +100,7 @@ export function ActivityFilters({
                 className={FIELD}
                 inputMode="decimal"
                 aria-invalid={badAmount.min}
+                aria-describedby={badAmount.min || badAmount.max ? "amount-problem" : undefined}
                 value={draft.min}
                 onChange={(e) => update({ min: e.target.value })}
               />
@@ -116,14 +111,17 @@ export function ActivityFilters({
                 className={FIELD}
                 inputMode="decimal"
                 aria-invalid={badAmount.max}
+                aria-describedby={badAmount.min || badAmount.max ? "amount-problem" : undefined}
                 value={draft.max}
                 onChange={(e) => update({ max: e.target.value })}
               />
             </label>
           </div>
-          {(badAmount.min || badAmount.max) && (
-            <p role="alert" className="text-sm text-danger">
-              {t.filters_bad_amount({ example })}
+          {(badAmount.min || badAmount.max || badAmount.order) && (
+            <p id="amount-problem" role="alert" className="text-sm text-danger">
+              {badAmount.order && !badAmount.min && !badAmount.max
+                ? t.filters_min_over_max()
+                : t.filters_bad_amount({ example })}
             </p>
           )}
           <fieldset className="flex flex-col gap-1">

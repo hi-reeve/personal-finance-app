@@ -216,5 +216,6 @@
   "filters_clear": "Clear filters",
   "filters_results": "Showing {shown} of {total}",
   "filters_none": "Nothing matches these filters.",
-  "filters_show_more": "Show more"
+  "filters_show_more": "Show more",
+  "filters_min_over_max": "The smallest amount is above the largest."
 }

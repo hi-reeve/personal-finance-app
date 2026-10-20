@@ -216,5 +216,6 @@
   "filters_clear": "Hapus filter",
   "filters_results": "Menampilkan {shown} dari {total}",
   "filters_none": "Tidak ada yang cocok dengan filter ini.",
-  "filters_show_more": "Tampilkan lebih banyak"
+  "filters_show_more": "Tampilkan lebih banyak",
+  "filters_min_over_max": "Jumlah terkecil lebih besar dari jumlah terbesar."
 }

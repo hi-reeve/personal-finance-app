@@ -19,7 +19,10 @@ export interface ActivityFilter {
   categoryIds?: readonly string[];
   tagIds?: readonly string[];
   kind?: ActivityKind;
-  /** The size of the amount in minor units, whichever way the money moved. */
+  /**
+   * The size of the amount in minor units, whichever way the money moved. Compared as stored, in
+   * each Account's own currency, until Transactions carry a base-currency amount.
+   */
   minAmount?: number;
   maxAmount?: number;
 }
@@ -67,6 +70,7 @@ export function filterActivity(
     if (filter.to !== undefined && date > filter.to) return false;
     if (needle !== "" && !matchesText(entry, needle)) return false;
 
+    // A Transaction that nets to zero counts as an expense.
     const kind: ActivityKind =
       entry.kind === "transfer" ? "transfer" : entry.transaction.total > 0 ? "income" : "expense";
     if (filter.kind !== undefined && filter.kind !== kind) return false;

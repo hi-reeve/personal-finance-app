@@ -27,6 +27,11 @@ const CURRENCIES = {
 } as const satisfies Record<string, CurrencyInfo>;
 
 export type CurrencyCode = keyof typeof CURRENCIES;
+/** Digits after the decimal point: 0 for rupiah and yen, 2 for most others. */
+export function currencyExponent(code: CurrencyCode): number {
+  return CURRENCIES[code].exponent;
+}
+
 export const currencyCodes = Object.keys(CURRENCIES) as CurrencyCode[];
 
 const SEPARATORS: Record<NumberFormat, { thousands: string; decimal: string }> = {

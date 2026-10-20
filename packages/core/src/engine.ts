@@ -3,6 +3,7 @@ import { compareHlc, type Hlc } from "./hlc";
 import { newUuidV7 } from "./ids";
 import type { Entity, Op, OpValue } from "./ops";
 import { currencyCodes, type CurrencyCode } from "./format";
+import { convertMinor, normalizeRate } from "./rates";
 import {
   assertAccountColor,
   assertAccountIcon,
@@ -63,6 +64,13 @@ export interface Tag {
   name: string;
 }
 
+export interface TransferFee {
+  amount: number;
+  categoryId: string;
+  /** Rate to the base currency when the fee is charged in another currency. */
+  rate?: string;
+}
+
 /** Money moved between two of the user's own Accounts. Not income or expense. */
 export interface Transfer {
   id: string;
@@ -77,7 +85,7 @@ export interface Transfer {
   /** Arrives in the to Account, in its currency. Equals `fromAmount` when the currencies match. */
   toAmount: number;
   /** Charged to the from Account and recorded as spending in an expense Category. */
-  fee?: { amount: number; categoryId: string };
+  fee?: TransferFee;
   createdAt: number;
 }
 
@@ -89,12 +97,12 @@ export interface NewTransfer {
   note?: string;
   fromAmount: number;
   toAmount: number;
-  fee?: { amount: number; categoryId: string };
+  fee?: TransferFee;
 }
 
 /** `fee: null` removes the fee. An empty `time` or `note` clears it. */
 export type TransferPatch = Partial<Omit<NewTransfer, "fee">> & {
-  fee?: { amount: number; categoryId: string } | null;
+  fee?: TransferFee | null;
 };
 
 export interface Transaction {
@@ -107,6 +115,9 @@ export interface Transaction {
   payee?: string;
   note?: string;
   lines: Line[];
+  /** Frozen rate to the base currency; absent for an Account in the base currency. */
+  rate?: string;
+  original?: OriginalAmount;
   /** Set on a Transfer's fee, which is changed through its Transfer. */
   transferId?: string;
   /** Tags on the Transaction, by id. Absent when there are none. */
@@ -162,16 +173,32 @@ export interface NewLine {
   itemName?: string;
 }
 
+/** What was really paid, for display only: for example USD 12 on a card that is in rupiah. */
+export interface OriginalAmount {
+  amount: number;
+  currency: CurrencyCode;
+}
+
 export interface NewTransaction {
   accountId: string;
   date: string;
   time?: string;
   payee?: string;
   note?: string;
+  /**
+   * Units of the base currency one whole unit of the Account's currency buys, as decimal text,
+   * frozen with the Transaction. Required for an Account not in the base currency, and not allowed
+   * for one that is.
+   */
+  rate?: string;
+  original?: OriginalAmount;
   lines: NewLine[];
 }
 
-export type TransactionPatch = Partial<Omit<NewTransaction, "lines">>;
+/** An empty `time` clears it; `original: null` removes the original amount. */
+export type TransactionPatch = Partial<Omit<NewTransaction, "lines" | "original">> & {
+  original?: OriginalAmount | null;
+};
 
 export type LinePatch = Partial<NewLine>;
 
@@ -266,6 +293,12 @@ export interface Engine {
   getTransfer(id: string): Promise<Transfer | undefined>;
   /** Live Transfers, oldest date first. */
   listTransfers(): Promise<Transfer[]>;
+  /**
+   * Each Line and the total in the base currency, converted at the Transaction's own frozen rate.
+   * Absent when there is nothing to convert at: no base currency yet, or an old foreign Transaction
+   * with no rate.
+   */
+  getBaseAmounts(transactionId: string): Promise<{ lines: number[]; total: number } | undefined>;
   /** Live Transactions, oldest date first. A Transfer's fee is included; the Transfer is not. */
   listTransactions(): Promise<Transaction[]>;
   /** Every op this device holds, to send to another device. */
@@ -427,6 +460,9 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
     const ownedLines = owned.map(readLine);
     const tagIds = tagsOn(id);
     const transferId = text(f, "transferId") || undefined;
+    const rate = text(f, "rate") || undefined;
+    const originalCurrency = text(f, "originalCurrency") as CurrencyCode | undefined;
+    const originalAmount = Number(f.get("originalAmount")?.value ?? 0);
     return {
       id,
       accountId: text(f, "accountId")!,
@@ -435,6 +471,10 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
       ...(payee !== undefined ? { payee } : {}),
       ...(note !== undefined ? { note } : {}),
       lines: ownedLines,
+      ...(rate !== undefined ? { rate } : {}),
+      ...(originalCurrency && originalAmount > 0
+        ? { original: { amount: originalAmount, currency: originalCurrency } }
+        : {}),
       ...(transferId !== undefined ? { transferId } : {}),
       ...(tagIds.length > 0 ? { tagIds } : {}),
       total: ownedLines.reduce((sum, line) => sum + line.amount, 0),
@@ -721,7 +761,8 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
     const time = text(f, "time") || undefined;
     const note = text(f, "note") || undefined;
     const feeId = feeTransactionOf(id);
-    const feeLine = feeId !== undefined ? readTransaction(feeId)?.lines[0] : undefined;
+    const feeTx = feeId !== undefined ? readTransaction(feeId) : undefined;
+    const feeLine = feeTx?.lines[0];
     return {
       id,
       fromAccountId: text(f, "fromAccountId")!,
@@ -732,7 +773,13 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
       fromAmount: Number(f.get("fromAmount")!.value),
       toAmount: Number(f.get("toAmount")!.value),
       ...(feeLine !== undefined
-        ? { fee: { amount: -feeLine.amount, categoryId: feeLine.categoryId } }
+        ? {
+            fee: {
+              amount: -feeLine.amount,
+              categoryId: feeLine.categoryId,
+              ...(feeTx?.rate !== undefined ? { rate: feeTx.rate } : {}),
+            },
+          }
         : {}),
       createdAt: Number(f.get("createdAt")!.value),
     };
@@ -786,13 +833,13 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
     }
   }
 
-  function feeOps(transferId: string, transfer: NewTransfer): Op[] {
+  function feeOps(transferId: string, transfer: NewTransfer, rate: string): Op[] {
     const id = feeIdOf(transferId);
     const lineId = feeLineIdOf(transferId);
     const fee = transfer.fee;
     if (fee === undefined)
       return isLive(id) ? opsFor("transaction", id, { deletedAt: clock.now() }) : [];
-    const where = { accountId: transfer.fromAccountId, date: transfer.date };
+    const where = { accountId: transfer.fromAccountId, date: transfer.date, rate };
     const spending = { categoryId: fee.categoryId, amount: -fee.amount };
     if (transactions.has(id))
       return [
@@ -803,6 +850,62 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
       ...opsFor("transaction", id, { ...where, transferId, createdAt: clock.now() }),
       ...opsFor("line", lineId, { transactionId: id, ...spending }),
     ];
+  }
+
+  /**
+   * The rate to store for a Transaction on `accountId`: checked against the base currency, and
+   * empty when none applies. Skipped where there is nothing to compare with.
+   */
+  function resolveRate(accountId: string, rate: string | undefined, required = true): string {
+    const given = rate === undefined ? undefined : normalizeRate(rate);
+    if (rate !== undefined && given === undefined) throw new Error(`Invalid rate "${rate}"`);
+    const base = readSettings().baseCurrency;
+    const account = accounts.get(accountId);
+    if (base === undefined || account === undefined) return given ?? "";
+    const currency = text(account, "currency");
+    if (currency === base) {
+      if (given !== undefined && given !== "1")
+        throw new Error("A Transaction in the base currency has no rate");
+      return "";
+    }
+    if (given === undefined) {
+      if (!required) return "";
+      throw new Error(`A Transaction in ${currency} needs a rate to ${base}`);
+    }
+    return given;
+  }
+
+  function checkOriginal(original: OriginalAmount) {
+    assertAmount(original.amount);
+    if (original.amount <= 0) throw new Error("The original amount must be above zero");
+    assertCurrency(original.currency);
+  }
+
+  /** Rate and original amount fields to write for a change to `current`. */
+  function currencyFields(
+    current: Transaction | undefined,
+    patch: TransactionPatch,
+    rateRequired = true,
+  ): Record<string, OpValue | undefined> {
+    const out: Record<string, OpValue | undefined> = {};
+    if (patch.accountId !== undefined || patch.rate !== undefined) {
+      const accountId = patch.accountId ?? current!.accountId;
+      const moved = current === undefined || accountId !== current.accountId;
+      out["rate"] = resolveRate(
+        accountId,
+        moved ? patch.rate : (patch.rate ?? current.rate),
+        rateRequired,
+      );
+    }
+    if (patch.original === null) {
+      out["originalAmount"] = 0;
+      out["originalCurrency"] = "";
+    } else if (patch.original !== undefined) {
+      checkOriginal(patch.original);
+      out["originalAmount"] = patch.original.amount;
+      out["originalCurrency"] = patch.original.currency;
+    }
+    return out;
   }
 
   function validateTransactionFields(values: TransactionPatch) {
@@ -830,15 +933,17 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
     }, spent);
   }
 
-  async function record(input: NewTransaction): Promise<Transaction> {
+  async function record(input: NewTransaction, rateRequired = true): Promise<Transaction> {
     validateTransactionFields(input);
     assertOpenForTransactions(input.accountId);
     if (input.lines.length === 0) throw new Error("A Transaction needs at least one Line");
     for (const line of input.lines) assertAmount(line.amount);
+    const money = currencyFields(undefined, input, rateRequired);
 
     const id = newUuidV7(clock, random);
     const ops = opsFor("transaction", id, {
       ...pick(input, TRANSACTION_FIELDS),
+      ...money,
       createdAt: clock.now(),
     });
     for (const line of input.lines) {
@@ -855,7 +960,8 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
       assertLive(id);
       assertNotFee(id);
       validateTransactionFields(patch);
-      await commit(opsFor("transaction", id, pick(patch, TRANSACTION_FIELDS)));
+      const money = currencyFields(readTransaction(id), patch);
+      await commit(opsFor("transaction", id, { ...pick(patch, TRANSACTION_FIELDS), ...money }));
     },
     async editLine(transactionId, lineId, patch) {
       assertLive(transactionId);
@@ -885,7 +991,8 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
       const kept = new Set(
         updates.flatMap((update) => (update.id !== undefined ? [update.id] : [])),
       );
-      const ops = opsFor("transaction", id, pick(patch, TRANSACTION_FIELDS));
+      const money = currencyFields(readTransaction(id), patch);
+      const ops = opsFor("transaction", id, { ...pick(patch, TRANSACTION_FIELDS), ...money });
       for (const update of updates) {
         const lineId = update.id ?? newUuidV7(clock, random);
         ops.push(
@@ -954,11 +1061,15 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
       assertAmount(target);
       const difference = target - balanceOf(accountId);
       if (difference === 0) throw new Error("The balance is already correct");
-      return record({
-        accountId,
-        date,
-        lines: [{ categoryId: BALANCE_ADJUSTMENT_CATEGORY, amount: difference }],
-      });
+      // Reports leave a Balance adjustment out, so it needs no rate even on a foreign Account.
+      return record(
+        {
+          accountId,
+          date,
+          lines: [{ categoryId: BALANCE_ADJUSTMENT_CATEGORY, amount: difference }],
+        },
+        false,
+      );
     },
     async deleteAccount(id) {
       assertAccount(id);
@@ -1120,7 +1231,7 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
           ...pick(input, TRANSFER_FIELDS),
           createdAt: clock.now(),
         }),
-        ...feeOps(id, input),
+        ...feeOps(id, input, input.fee ? resolveRate(input.fromAccountId, input.fee.rate) : ""),
       ]);
       return readTransfer(id);
     },
@@ -1132,7 +1243,16 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
       if (fee === null) delete next.fee;
       else if (fee !== undefined) next.fee = fee;
       checkTransfer(next, current, fee !== undefined);
-      await commit([...opsFor("transfer", id, pick(fields, TRANSFER_FIELDS)), ...feeOps(id, next)]);
+      // A changed fee is checked against the sending Account; an untouched one keeps its rate.
+      const feeRate = next.fee
+        ? fee !== undefined
+          ? resolveRate(next.fromAccountId, next.fee.rate)
+          : (current.fee?.rate ?? "")
+        : "";
+      await commit([
+        ...opsFor("transfer", id, pick(fields, TRANSFER_FIELDS)),
+        ...feeOps(id, next, feeRate),
+      ]);
       return readTransfer(id);
     },
     async deleteTransfer(id) {
@@ -1150,6 +1270,17 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
         .sort((a, b) =>
           a.date === b.date ? a.createdAt - b.createdAt || byId(a, b) : a.date < b.date ? -1 : 1,
         );
+    },
+    async getBaseAmounts(transactionId) {
+      const tx = readTransaction(transactionId);
+      const base = readSettings().baseCurrency;
+      const account = tx ? accounts.get(tx.accountId) : undefined;
+      if (tx === undefined || base === undefined || account === undefined) return undefined;
+      const currency = text(account, "currency") as CurrencyCode;
+      if (currency === base) return { lines: tx.lines.map((line) => line.amount), total: tx.total };
+      if (tx.rate === undefined) return undefined;
+      const converted = tx.lines.map((line) => convertMinor(line.amount, tx.rate!, currency, base));
+      return { lines: converted, total: converted.reduce((sum, amount) => sum + amount, 0) };
     },
     async listTransactions() {
       const live = [...transactions.keys()].flatMap((id) => readTransaction(id) ?? []);

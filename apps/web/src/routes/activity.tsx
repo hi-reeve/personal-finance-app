@@ -1,4 +1,5 @@
 import {
+  convertMinor,
   filterActivity,
   parseMoney,
   type ActivityEntry,
@@ -40,6 +41,21 @@ function List({ app }: { app: ReadyState }) {
   const accounts = new Map(app.accounts.map((a) => [a.id, a]));
   const currencyOf = (tx: Transaction) =>
     accounts.get(tx.accountId)?.currency ?? app.settings.baseCurrency ?? "USD";
+
+  const baseCurrency = app.settings.baseCurrency;
+  // What a foreign Transaction came to in the base currency, at its own frozen rate.
+  const baseText = (tx: Transaction): string | undefined => {
+    const currency = accounts.get(tx.accountId)?.currency;
+    if (baseCurrency === undefined || currency === undefined || currency === baseCurrency)
+      return undefined;
+    if (tx.rate === undefined) return undefined;
+    return t.activity_base({
+      amount: money(
+        Math.abs(convertMinor(tx.total, tx.rate, currency, baseCurrency)),
+        baseCurrency,
+      ),
+    });
+  };
 
   // A Transfer's fee shows inside its Transfer, not as a Transaction of its own.
   const everything = useMemo<ActivityEntry[]>(() => {
@@ -195,6 +211,16 @@ function List({ app }: { app: ReadyState }) {
                           </li>
                         ))}
                       </ul>
+                    )}
+                    {tx.original !== undefined && (
+                      <span className="block truncate text-sm text-ink-muted">
+                        {t.activity_original({
+                          amount: money(tx.original.amount, tx.original.currency),
+                        })}
+                      </span>
+                    )}
+                    {baseText(tx) !== undefined && (
+                      <span className="block truncate text-sm text-ink-muted">{baseText(tx)}</span>
                     )}
                     {tx.note !== undefined && (
                       <span className="block truncate text-sm text-ink-muted">{tx.note}</span>

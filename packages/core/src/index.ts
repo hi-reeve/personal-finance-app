@@ -1,4 +1,16 @@
 export {
+  convertMinor,
+  createRateProvider,
+  currencyApiFetcher,
+  frankfurterFetcher,
+  normalizeRate,
+  type GetJson,
+  type RateCacheStore,
+  type RateFetcher,
+  type RateLookup,
+  type RateProvider,
+} from "./rates";
+export {
   filterActivity,
   type ActivityEntry,
   type ActivityFilter,
@@ -39,6 +51,8 @@ export {
   type Settings,
   type Tag,
   type NewTransfer,
+  type OriginalAmount,
+  type TransferFee,
   type Transfer,
   type TransferPatch,
   type Transaction,
@@ -47,6 +61,7 @@ export {
 export type { Op } from "./ops";
 export {
   currencyCodes,
+  currencyExponent,
   formatDate,
   formatMoney,
   parseMoney,

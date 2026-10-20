@@ -217,5 +217,19 @@
   "filters_results": "Menampilkan {shown} dari {total}",
   "filters_none": "Tidak ada yang cocok dengan filter ini.",
   "filters_show_more": "Tampilkan lebih banyak",
-  "filters_min_over_max": "Jumlah terkecil lebih besar dari jumlah terbesar."
+  "filters_min_over_max": "Jumlah terkecil lebih besar dari jumlah terbesar.",
+  "rate_label": "Kurs: 1 {from} = ? {to}",
+  "rate_loading": "Mencari kurs…",
+  "rate_missing": "Kurs tidak ditemukan. Isi sendiri.",
+  "rate_saved": "Kurs hari itu, tersimpan di perangkat ini.",
+  "rate_fetched": "Kurs hari itu. Ubah jika berbeda.",
+  "rate_preview": "Sekitar {amount}.",
+  "rate_invalid": "Masukkan kurs seperti {example}.",
+  "tx_need_rate": "Isi kurs.",
+  "orig_summary": "Jumlah asli (opsional)",
+  "orig_amount": "Dibayar semula",
+  "orig_currency": "Mata uang asli",
+  "orig_invalid": "Isi jumlah asli seperti {example}, atau kosongkan.",
+  "activity_original": "Dibayar {amount}",
+  "activity_base": "≈ {amount}"
 }

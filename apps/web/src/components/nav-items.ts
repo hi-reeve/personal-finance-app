@@ -27,6 +27,7 @@ const activity: Destination = { to: "/activity", label: "nav_activity", icon: "a
 const budgets: Destination = { to: "/budgets", label: "nav_budgets", icon: "plan" };
 const recurring: Destination = { to: "/recurring", label: "nav_recurring", icon: "plan" };
 const accounts: Destination = { to: "/accounts", label: "nav_accounts", icon: "accounts" };
+const categories: Destination = { to: "/categories", label: "nav_categories", icon: "accounts" };
 const debts: Destination = { to: "/debts", label: "nav_debts", icon: "debts" };
 const split: Destination = { to: "/split", label: "nav_split", icon: "split" };
 const reports: Destination = { to: "/reports", label: "nav_reports", icon: "reports" };
@@ -43,7 +44,7 @@ const more: Destination = {
   to: "/more",
   label: "nav_more",
   icon: "more",
-  covers: ["/more", "/accounts", "/debts", "/split", "/reports", "/settings"],
+  covers: ["/more", "/accounts", "/categories", "/debts", "/split", "/reports", "/settings"],
 };
 
 /** Phone bar order; Add sits in the middle and is not a destination. */
@@ -57,13 +58,13 @@ export const SIDEBAR_GROUPS: readonly {
 }[] = [
   { items: [home, activity] },
   { heading: "nav_group_plan", items: [budgets, recurring] },
-  { heading: "nav_group_money", items: [accounts, debts, split] },
+  { heading: "nav_group_money", items: [accounts, categories, debts, split] },
   { heading: "nav_group_insights", items: [reports] },
 ];
 export const SIDEBAR_FOOTER = settings;
 
 /** What More lists on phone and tablet. */
-export const MORE_LIST = [accounts, debts, split, reports, settings] as const;
+export const MORE_LIST = [accounts, categories, debts, split, reports, settings] as const;
 
 export const ALL_PATHS = [
   "/",
@@ -72,6 +73,7 @@ export const ALL_PATHS = [
   "/recurring",
   "/more",
   "/accounts",
+  "/categories",
   "/debts",
   "/split",
   "/reports",

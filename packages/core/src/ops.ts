@@ -2,7 +2,14 @@ import type { Hlc } from "./hlc";
 
 export type OpValue = string | number;
 
-export type Entity = "transaction" | "line" | "account" | "settings";
+export type Entity =
+  | "transaction"
+  | "line"
+  | "account"
+  | "settings"
+  | "category"
+  | "tag"
+  | "tagging";
 
 /** One field of one record set to a value. The op log is a list of these. */
 export interface Op {

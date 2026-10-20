@@ -1,10 +1,12 @@
 import {
   createEngine,
   type Account,
+  type Category,
   type CurrencyCode,
   type Engine,
   type NewAccount,
   type Settings,
+  type Tag,
 } from "@pfa/core";
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { openWebStore } from "../storage/web-store";
@@ -49,6 +51,12 @@ export interface Snapshot {
   settings: Settings;
   accounts: AccountView[];
   transactions: number;
+  categories: Category[];
+  /** How many Lines use each Category, by id. */
+  categoryUse: Record<string, number>;
+  /** Categories on the latest Transactions, for the picker. */
+  recentCategories: Category[];
+  tags: Tag[];
 }
 
 export type ReadyState = { status: "ready"; completeSetup: CompleteSetup; act: Act } & Snapshot;
@@ -75,7 +83,24 @@ async function snapshot(engine: Engine): Promise<Snapshot> {
       hasHistory: used.has(account.id),
     })),
   );
-  return { settings: engine.getSettings(), accounts, transactions: transactions.length };
+  const categoryUse: Record<string, number> = {};
+  for (const tx of transactions)
+    for (const line of tx.lines)
+      categoryUse[line.categoryId] = (categoryUse[line.categoryId] ?? 0) + 1;
+  const [categories, recentCategories, tags] = await Promise.all([
+    engine.listCategories(),
+    engine.recentCategories(5),
+    engine.listTags(),
+  ]);
+  return {
+    settings: engine.getSettings(),
+    accounts,
+    transactions: transactions.length,
+    categories,
+    categoryUse,
+    recentCategories,
+    tags,
+  };
 }
 
 /** Opens the user's data once and keeps a current view of it for the screens. */

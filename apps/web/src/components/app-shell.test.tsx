@@ -58,6 +58,7 @@ describe("navigation layouts", () => {
       "Budgets",
       "Recurring & bills",
       "Accounts",
+      "Categories & tags",
       "Debts & loans",
       "Split bill",
       "Reports",

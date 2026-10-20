@@ -1,8 +1,7 @@
-import { Dialog } from "@ark-ui/react/dialog";
-import { Portal } from "@ark-ui/react/portal";
 import { Link, useRouter } from "@tanstack/react-router";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocale } from "./locale";
+import { TransactionDialog } from "./transaction-dialog";
 import {
   PHONE_LEFT,
   PHONE_RIGHT,
@@ -159,36 +158,6 @@ function Sidebar({ pathname }: { pathname: string }) {
   );
 }
 
-function AddDialog({
-  open,
-  onOpenChange,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
-  const { t } = useLocale();
-  return (
-    <Dialog.Root open={open} onOpenChange={(details) => onOpenChange(details.open)}>
-      <Portal>
-        <Dialog.Backdrop className="fixed inset-0 z-30 bg-ink/40" />
-        <Dialog.Positioner className="fixed inset-0 z-40 flex items-end justify-center md:items-center">
-          <Dialog.Content className="w-full rounded-t-2xl border border-line bg-surface p-5 text-ink shadow-xl md:max-w-md md:rounded-2xl">
-            <Dialog.Title className="text-lg font-semibold">{t.add_transaction()}</Dialog.Title>
-            <Dialog.Description className="mt-2 text-sm text-ink-muted">
-              {t.add_placeholder()}
-            </Dialog.Description>
-            <Dialog.CloseTrigger
-              className={`mt-4 min-h-11 rounded-lg border border-control px-4 ${FOCUS}`}
-            >
-              {t.add_close()}
-            </Dialog.CloseTrigger>
-          </Dialog.Content>
-        </Dialog.Positioner>
-      </Portal>
-    </Dialog.Root>
-  );
-}
-
 function isTyping(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   return target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
@@ -249,7 +218,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <Icon name="add" />
         <span className="hidden lg:inline">{t.add_transaction()}</span>
       </button>
-      <AddDialog open={adding} onOpenChange={setAdding} />
+      <TransactionDialog open={adding} onOpenChange={setAdding} />
     </div>
   );
 }

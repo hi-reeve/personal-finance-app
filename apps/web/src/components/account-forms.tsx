@@ -12,6 +12,7 @@ import {
 } from "@pfa/core";
 import { useId, useState, type FormEvent, type ReactNode } from "react";
 import { useApp, type AccountView } from "../app/app-provider";
+import { today } from "../app/today";
 import { useLocale } from "./locale";
 
 const FIELD =
@@ -227,11 +228,7 @@ export function AdjustForm({
       return;
     }
     setProblem(undefined);
-    const now = new Date();
-    const day = [now.getFullYear(), now.getMonth() + 1, now.getDate()]
-      .map((part) => String(part).padStart(2, "0"))
-      .join("-");
-    await onApply(amount, day);
+    await onApply(amount, today());
   }
 
   return (

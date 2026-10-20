@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
-import { BALANCE_ADJUSTMENT_CATEGORY, createEngine, createMemoryStore } from "./index";
+import {
+  BALANCE_ADJUSTMENT_CATEGORY,
+  createEngine,
+  createMemoryStore,
+  signedAmount,
+} from "./index";
 import { createManualClock, createSeededRandom } from "./testing";
 
 const NOW = 1_700_000_000_000;
@@ -222,5 +227,36 @@ describe("merging devices", () => {
     await one.engine.archiveAccount(account.id);
     await two.engine.applyOps(await one.engine.exportOps());
     expect((await two.engine.listAccounts())[0]!.archivedAt).toBe(NOW);
+  });
+});
+
+describe("signedAmount", () => {
+  it("makes expenses negative and income positive from the typed magnitude", () => {
+    expect(signedAmount("expense", 25_000)).toBe(-25_000);
+    expect(signedAmount("income", 25_000)).toBe(25_000);
+  });
+
+  it("rejects zero, negative and fractional magnitudes", () => {
+    for (const bad of [0, -1, 1.5, Number.NaN]) {
+      expect(() => signedAmount("expense", bad)).toThrow();
+    }
+  });
+});
+
+describe("clearing optional Transaction text", () => {
+  it("an empty payee, note or time reads as absent", async () => {
+    const { engine } = await device();
+    const account = await engine.createAccount(wallet);
+    const tx = await engine.recordTransaction({
+      ...spend(account.id, -100),
+      payee: "Warung",
+      note: "lunch",
+      time: "12:30",
+    });
+    await engine.editTransaction(tx.id, { payee: "", note: "", time: "" });
+    const read = (await engine.getTransaction(tx.id))!;
+    expect(read.payee).toBeUndefined();
+    expect(read.note).toBeUndefined();
+    expect(read.time).toBeUndefined();
   });
 });

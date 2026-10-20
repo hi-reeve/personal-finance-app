@@ -31,6 +31,16 @@ export interface Line {
 
 export type CategoryKind = "income" | "expense";
 
+/**
+ * The stored amount for a typed magnitude: expenses are negative, income positive. Lines hold
+ * signed minor units, so balances and reports add them up directly.
+ */
+export function signedAmount(kind: CategoryKind, magnitude: number): number {
+  if (!Number.isSafeInteger(magnitude) || magnitude <= 0)
+    throw new Error(`Invalid amount ${magnitude}: expected a positive whole number of minor units`);
+  return kind === "expense" ? -magnitude : magnitude;
+}
+
 export interface Category {
   id: string;
   name: string;
@@ -321,9 +331,9 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
     if (!isLive(id)) return undefined;
     const f = transactions.get(id)!;
     const owned = [...(lineIdsByTransaction.get(id) ?? [])].sort();
-    const time = text(f, "time");
-    const payee = text(f, "payee");
-    const note = text(f, "note");
+    const time = text(f, "time") || undefined;
+    const payee = text(f, "payee") || undefined;
+    const note = text(f, "note") || undefined;
     let updatedAt = 0;
     for (const fields of [f, ...owned.map((lineId) => lines.get(lineId)!)]) {
       for (const { hlc } of fields.values()) updatedAt = Math.max(updatedAt, hlc.wall);
@@ -600,7 +610,8 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
 
   function validateTransactionFields(values: TransactionPatch) {
     if (values.date !== undefined) assertDate(values.date);
-    if (values.time !== undefined) assertTime(values.time);
+    // An empty string clears the time.
+    if (values.time !== undefined && values.time !== "") assertTime(values.time);
   }
 
   function pick<K extends string>(source: Partial<Record<K, OpValue>>, keys: readonly K[]) {

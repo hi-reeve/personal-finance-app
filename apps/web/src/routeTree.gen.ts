@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AccountsRouteImport } from './routes/accounts'
 import { Route as ActivityRouteImport } from './routes/activity'
 import { Route as BudgetsRouteImport } from './routes/budgets'
+import { Route as CategoriesRouteImport } from './routes/categories'
 import { Route as DebtsRouteImport } from './routes/debts'
 import { Route as MoreRouteImport } from './routes/more'
 import { Route as RecurringRouteImport } from './routes/recurring'
@@ -38,6 +39,11 @@ const ActivityRoute = ActivityRouteImport.update({
 const BudgetsRoute = BudgetsRouteImport.update({
   id: '/budgets',
   path: '/budgets',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CategoriesRoute = CategoriesRouteImport.update({
+  id: '/categories',
+  path: '/categories',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DebtsRoute = DebtsRouteImport.update({
@@ -76,6 +82,7 @@ export interface FileRoutesByFullPath {
   '/accounts': typeof AccountsRoute
   '/activity': typeof ActivityRoute
   '/budgets': typeof BudgetsRoute
+  '/categories': typeof CategoriesRoute
   '/debts': typeof DebtsRoute
   '/more': typeof MoreRoute
   '/recurring': typeof RecurringRoute
@@ -88,6 +95,7 @@ export interface FileRoutesByTo {
   '/accounts': typeof AccountsRoute
   '/activity': typeof ActivityRoute
   '/budgets': typeof BudgetsRoute
+  '/categories': typeof CategoriesRoute
   '/debts': typeof DebtsRoute
   '/more': typeof MoreRoute
   '/recurring': typeof RecurringRoute
@@ -101,6 +109,7 @@ export interface FileRoutesById {
   '/accounts': typeof AccountsRoute
   '/activity': typeof ActivityRoute
   '/budgets': typeof BudgetsRoute
+  '/categories': typeof CategoriesRoute
   '/debts': typeof DebtsRoute
   '/more': typeof MoreRoute
   '/recurring': typeof RecurringRoute
@@ -115,6 +124,7 @@ export interface FileRouteTypes {
     | '/accounts'
     | '/activity'
     | '/budgets'
+    | '/categories'
     | '/debts'
     | '/more'
     | '/recurring'
@@ -127,6 +137,7 @@ export interface FileRouteTypes {
     | '/accounts'
     | '/activity'
     | '/budgets'
+    | '/categories'
     | '/debts'
     | '/more'
     | '/recurring'
@@ -139,6 +150,7 @@ export interface FileRouteTypes {
     | '/accounts'
     | '/activity'
     | '/budgets'
+    | '/categories'
     | '/debts'
     | '/more'
     | '/recurring'
@@ -152,6 +164,7 @@ export interface RootRouteChildren {
   AccountsRoute: typeof AccountsRoute
   ActivityRoute: typeof ActivityRoute
   BudgetsRoute: typeof BudgetsRoute
+  CategoriesRoute: typeof CategoriesRoute
   DebtsRoute: typeof DebtsRoute
   MoreRoute: typeof MoreRoute
   RecurringRoute: typeof RecurringRoute
@@ -188,6 +201,13 @@ declare module '@tanstack/react-router' {
       path: '/budgets'
       fullPath: '/budgets'
       preLoaderRoute: typeof BudgetsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/categories': {
+      id: '/categories'
+      path: '/categories'
+      fullPath: '/categories'
+      preLoaderRoute: typeof CategoriesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/debts': {
@@ -240,6 +260,7 @@ const rootRouteChildren: RootRouteChildren = {
   AccountsRoute: AccountsRoute,
   ActivityRoute: ActivityRoute,
   BudgetsRoute: BudgetsRoute,
+  CategoriesRoute: CategoriesRoute,
   DebtsRoute: DebtsRoute,
   MoreRoute: MoreRoute,
   RecurringRoute: RecurringRoute,

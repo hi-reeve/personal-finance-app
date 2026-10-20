@@ -32,6 +32,9 @@ export {
   type NewTransaction,
   type Settings,
   type Tag,
+  type NewTransfer,
+  type Transfer,
+  type TransferPatch,
   type Transaction,
   type TransactionPatch,
 } from "./engine";

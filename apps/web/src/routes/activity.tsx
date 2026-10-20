@@ -1,7 +1,16 @@
-import type { Transaction, Transfer } from "@pfa/core";
+import {
+  filterActivity,
+  parseMoney,
+  type ActivityEntry,
+  type ActivityFilter,
+  type Transaction,
+  type Transfer,
+} from "@pfa/core";
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useActivityFilter } from "../app/activity-filter-state";
 import { useApp, type ReadyState } from "../app/app-provider";
+import { ActivityFilters } from "../components/activity-filters";
 import { Amount } from "../components/amount";
 import { useCategoryLabel } from "../components/category-label";
 import { useLocale } from "../components/locale";
@@ -11,6 +20,8 @@ import { TransactionDialog, isEditable } from "../components/transaction-dialog"
 
 export const Route = createFileRoute("/activity")({ component: Activity });
 
+const PAGE = 50;
+
 function Activity() {
   const { t } = useLocale();
   const app = useApp();
@@ -18,7 +29,7 @@ function Activity() {
 }
 
 function List({ app }: { app: ReadyState }) {
-  const { t, money, date } = useLocale();
+  const { t, money, date, numberFormat } = useLocale();
   const label = useCategoryLabel(app.categories);
   // Kept after the dialog closes so its title does not change while it animates away.
   const [editing, setEditing] = useState<Transaction | undefined>(undefined);
@@ -31,30 +42,54 @@ function List({ app }: { app: ReadyState }) {
     accounts.get(tx.accountId)?.currency ?? app.settings.baseCurrency ?? "USD";
 
   // A Transfer's fee shows inside its Transfer, not as a Transaction of its own.
-  const entries = [
-    ...app.activity
-      .filter((tx) => tx.transferId === undefined)
-      .map((tx) => ({
-        kind: "transaction" as const,
-        tx,
-        date: tx.date,
-        createdAt: tx.createdAt,
-        id: tx.id,
-      })),
-    ...app.transfers.map((transfer) => ({
-      kind: "transfer" as const,
-      transfer,
-      date: transfer.date,
-      createdAt: transfer.createdAt,
-      id: transfer.id,
-    })),
-  ].sort((a, b) =>
-    a.date !== b.date
-      ? a.date < b.date
-        ? 1
-        : -1
-      : b.createdAt - a.createdAt || (a.id < b.id ? 1 : -1),
+  const everything = useMemo<ActivityEntry[]>(() => {
+    const dateOf = (e: ActivityEntry) =>
+      e.kind === "transfer" ? e.transfer.date : e.transaction.date;
+    const createdOf = (e: ActivityEntry) =>
+      e.kind === "transfer" ? e.transfer.createdAt : e.transaction.createdAt;
+    const idOf = (e: ActivityEntry) => (e.kind === "transfer" ? e.transfer.id : e.transaction.id);
+    return [
+      ...app.activity
+        .filter((tx) => tx.transferId === undefined)
+        .map((transaction) => ({ kind: "transaction" as const, transaction })),
+      ...app.transfers.map((transfer) => ({ kind: "transfer" as const, transfer })),
+    ].sort((a, b) =>
+      dateOf(a) !== dateOf(b)
+        ? dateOf(a) < dateOf(b)
+          ? 1
+          : -1
+        : createdOf(b) - createdOf(a) || (idOf(a) < idOf(b) ? 1 : -1),
+    );
+  }, [app.activity, app.transfers]);
+
+  const { draft } = useActivityFilter();
+  const base = app.settings.baseCurrency ?? "USD";
+  const min = draft.min.trim() === "" ? undefined : parseMoney(draft.min, base, { numberFormat });
+  const max = draft.max.trim() === "" ? undefined : parseMoney(draft.max, base, { numberFormat });
+  const badAmount = {
+    min: draft.min.trim() !== "" && min === undefined,
+    max: draft.max.trim() !== "" && max === undefined,
+  };
+  const filter: ActivityFilter = {
+    ...(draft.text.trim() !== "" ? { text: draft.text } : {}),
+    ...(draft.from !== "" ? { from: draft.from } : {}),
+    ...(draft.to !== "" ? { to: draft.to } : {}),
+    ...(draft.accountIds.length > 0 ? { accountIds: draft.accountIds } : {}),
+    ...(draft.categoryId !== undefined ? { categoryIds: [draft.categoryId] } : {}),
+    ...(draft.tagIds.length > 0 ? { tagIds: draft.tagIds } : {}),
+    ...(draft.kind !== "all" ? { kind: draft.kind } : {}),
+    ...(min !== undefined ? { minAmount: min } : {}),
+    ...(max !== undefined ? { maxAmount: max } : {}),
+  };
+  const filterKey = JSON.stringify(filter);
+  const entries = useMemo(
+    () => filterActivity(everything, filter, { categories: app.categories }),
+    [everything, filterKey, app.categories],
   );
+  // Large lists render a page at a time; any change to the filter starts again at the first page.
+  const [shown, setShown] = useState(PAGE);
+  useEffect(() => setShown(PAGE), [filterKey]);
+  const active = Object.keys(filter).length;
 
   async function remove(id: string, kind: "transaction" | "transfer") {
     setProblem(undefined);
@@ -75,11 +110,19 @@ function List({ app }: { app: ReadyState }) {
           {problem}
         </p>
       )}
+      <ActivityFilters app={app} active={active} badAmount={badAmount} />
+      {active > 0 && (
+        <p className="text-sm text-ink-muted" aria-live="polite">
+          {t.filters_results({ shown: Math.min(shown, entries.length), total: entries.length })}
+        </p>
+      )}
       {entries.length === 0 ? (
-        <p className="text-ink-muted">{t.activity_empty()}</p>
+        <p className="text-ink-muted">
+          {everything.length === 0 ? t.activity_empty() : t.filters_none()}
+        </p>
       ) : (
-        <ul className="flex flex-col gap-2">
-          {entries.map((entry) => {
+        <ul aria-label={t.nav_activity()} className="flex flex-col gap-2">
+          {entries.slice(0, shown).map((entry) => {
             if (entry.kind === "transfer")
               return (
                 <TransferRow
@@ -97,7 +140,7 @@ function List({ app }: { app: ReadyState }) {
                   onDelete={() => remove(entry.transfer.id, "transfer")}
                 />
               );
-            const tx = entry.tx;
+            const tx = entry.transaction;
             const account = accounts.get(tx.accountId);
             const category = label(tx.lines[0]?.categoryId ?? "");
             const title = tx.payee ?? category;
@@ -192,6 +235,11 @@ function List({ app }: { app: ReadyState }) {
             );
           })}
         </ul>
+      )}
+      {entries.length > shown && (
+        <button type="button" className={BUTTON} onClick={() => setShown((n) => n + PAGE)}>
+          {t.filters_show_more()}
+        </button>
       )}
       <TransactionDialog
         open={editOpen}

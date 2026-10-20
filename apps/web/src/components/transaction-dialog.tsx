@@ -311,7 +311,7 @@ export function TransactionDialog({
       <Portal>
         <Dialog.Backdrop className="fixed inset-0 z-30 bg-ink/40" />
         <Dialog.Positioner className="fixed inset-0 z-40 flex items-end justify-center md:items-center">
-          <Dialog.Content className="max-h-[92dvh] w-full overflow-y-auto rounded-t-2xl border border-line bg-surface p-5 text-ink shadow-xl md:max-w-md md:rounded-2xl">
+          <Dialog.Content className="max-h-[92dvh] md:max-h-[calc(100dvh-6rem)] w-full overflow-y-auto rounded-t-2xl border border-line bg-surface p-5 text-ink shadow-xl md:max-w-md md:rounded-2xl">
             <Dialog.Title className="text-lg font-semibold">
               {transaction === undefined ? t.add_transaction() : t.tx_title_edit()}
             </Dialog.Title>

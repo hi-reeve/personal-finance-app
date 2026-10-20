@@ -49,26 +49,36 @@ export interface SpendingInput extends SpendingQuery {
 }
 
 /**
- * Shares in basis points that add up to exactly 10,000 (largest remainder), so a donut chart
- * never leaves a gap or overshoots.
+ * Splits `amount` among `weights` in proportion, in whole units, by largest remainder: the parts
+ * always add up to exactly `amount`. Negative weights count as nothing. Used for shares in basis
+ * points, so a donut never leaves a gap or overshoots.
  */
-function shares(totals: readonly number[], whole: number): number[] {
-  if (whole <= 0) return totals.map(() => 0);
-  const scaled = totals.map((total) => BigInt(Math.max(total, 0)) * 10_000n);
-  const bottom = BigInt(whole);
-  const floors = scaled.map((value) => value / bottom);
-  let left = 10_000n - floors.reduce((sum, value) => sum + value, 0n);
-  const byRemainder = scaled
-    .map((value, index) => ({ index, remainder: value % bottom }))
+function allocate(amount: number, weights: readonly number[]): number[] {
+  const clamped = weights.map((weight) => BigInt(Math.max(weight, 0)));
+  const whole = clamped.reduce((sum, weight) => sum + weight, 0n);
+  if (whole === 0n || amount <= 0) return weights.map(() => 0);
+  const scaled = clamped.map((weight) => weight * BigInt(amount));
+  const parts = scaled.map((value) => value / whole);
+  let left = BigInt(amount) - parts.reduce((sum, part) => sum + part, 0n);
+  const order = scaled
+    .map((value, index) => ({ index, remainder: value % whole }))
     .sort((a, b) =>
       a.remainder === b.remainder ? a.index - b.index : a.remainder > b.remainder ? -1 : 1,
     );
-  for (const { index } of byRemainder) {
+  for (const { index } of order) {
     if (left <= 0n) break;
-    floors[index] = (floors[index] ?? 0n) + 1n;
+    parts[index] = (parts[index] ?? 0n) + 1n;
     left -= 1n;
   }
-  return floors.map(Number);
+  return parts.map(Number);
+}
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+function push<K, V>(map: Map<K, V[]>, key: K, value: V) {
+  const list = map.get(key);
+  if (list) list.push(value);
+  else map.set(key, [value]);
 }
 
 /**
@@ -80,6 +90,8 @@ function shares(totals: readonly number[], whole: number): number[] {
 export function spendingByCategory(input: SpendingInput): SpendingByCategory {
   const kind = input.kind ?? "expense";
   const { base, from, to } = input;
+  if (!ISO_DATE.test(from) || !ISO_DATE.test(to) || from > to)
+    throw new Error(`Invalid period ${from} to ${to}: expected YYYY-MM-DD dates, earliest first`);
   const result: SpendingByCategory = {
     ...(base !== undefined ? { currency: base } : {}),
     kind,
@@ -92,7 +104,7 @@ export function spendingByCategory(input: SpendingInput): SpendingByCategory {
   if (base === undefined) return result;
 
   const known = new Map(input.categories.map((c) => [c.id, c]));
-  const own = new Map<string, number>();
+  const figures = new Map<string, number>();
   for (const tx of input.transactions) {
     if (tx.date < from || tx.date > to) continue;
     const currency = input.accountCurrency.get(tx.accountId);
@@ -101,35 +113,54 @@ export function spendingByCategory(input: SpendingInput): SpendingByCategory {
       // A Line whose Category is gone counts by the way the money moved.
       const lineKind = known.get(line.categoryId)?.kind ?? (line.amount < 0 ? "expense" : "income");
       if (lineKind !== kind) continue;
-      let amount: number;
+      let amount: number | undefined;
       if (currency === base) amount = line.amount;
-      else if (currency !== undefined && tx.rate !== undefined)
-        amount = convertMinor(line.amount, tx.rate, currency, base);
-      else {
+      else if (currency !== undefined && tx.rate !== undefined) {
+        try {
+          amount = convertMinor(line.amount, tx.rate, currency, base);
+        } catch {
+          // A rate or amount that cannot be converted is counted, not allowed to sink the report.
+        }
+      }
+      if (amount === undefined) {
         result.skipped.lines += 1;
         continue;
       }
-      own.set(
+      figures.set(
         line.categoryId,
-        (own.get(line.categoryId) ?? 0) + (kind === "expense" ? -amount : amount),
+        (figures.get(line.categoryId) ?? 0) + (kind === "expense" ? -amount : amount),
       );
     }
   }
 
   const childrenOf = new Map<string | undefined, string[]>();
-  for (const id of own.keys())
-    if (!known.has(id)) childrenOf.set(undefined, [...(childrenOf.get(undefined) ?? []), id]);
+  for (const id of figures.keys()) if (!known.has(id)) push(childrenOf, undefined, id);
   for (const c of input.categories) {
     if (c.kind !== kind) continue;
-    childrenOf.set(c.parentId, [...(childrenOf.get(c.parentId) ?? []), c.id]);
+    // A Category whose parent is gone, or of the other kind, is shown at the top so no figure
+    // falls out of the total.
+    const parent =
+      c.parentId !== undefined && known.get(c.parentId)?.kind === kind ? c.parentId : undefined;
+    push(childrenOf, parent, c.id);
   }
+
+  // Largest first; ties by name, then id, so every device lists them the same way.
+  const ranked = (nodes: CategorySpend[]) =>
+    nodes.sort((a, b) => {
+      if (b.total !== a.total) return b.total - a.total;
+      const names =
+        (a.name ?? "") === (b.name ?? "") ? 0 : (a.name ?? "") < (b.name ?? "") ? -1 : 1;
+      return names !== 0 ? names : a.categoryId < b.categoryId ? -1 : 1;
+    });
 
   // Every Category with a figure, and every parent that leads to one.
   const build = (id: string): CategorySpend | undefined => {
-    const children = (childrenOf.get(id) ?? [])
-      .map(build)
-      .filter((child): child is CategorySpend => child !== undefined);
-    const mine = own.get(id);
+    const children = ranked(
+      (childrenOf.get(id) ?? [])
+        .map(build)
+        .filter((child): child is CategorySpend => child !== undefined),
+    );
+    const mine = figures.get(id);
     if (mine === undefined && children.length === 0) return undefined;
     const category = known.get(id);
     return {
@@ -141,36 +172,35 @@ export function spendingByCategory(input: SpendingInput): SpendingByCategory {
       children,
     };
   };
-  const ranked = (nodes: CategorySpend[]) =>
-    nodes.sort((a, b) =>
-      b.total !== a.total ? b.total - a.total : (a.name ?? "") < (b.name ?? "") ? -1 : 1,
-    );
   const tops = ranked(
     (childrenOf.get(undefined) ?? [])
       .map(build)
       .filter((node): node is CategorySpend => node !== undefined),
   );
 
-  const total = tops.reduce((sum, node) => sum + node.total, 0);
-  const place = (nodes: CategorySpend[]) => {
-    ranked(nodes);
-    for (const node of nodes) {
-      node.share =
-        total > 0
-          ? Number((BigInt(Math.max(node.total, 0)) * 10_000n + BigInt(total) / 2n) / BigInt(total))
-          : 0;
-      place(node.children);
-    }
+  // Shares of what was actually spent, level by level: a node's share is split among its children
+  // and its own Lines, so children never show more than their parent and the top adds to 100%.
+  // A Category whose refunds outweigh its spending has no share.
+  const give = (nodes: CategorySpend[], amount: number) => {
+    const parts = allocate(
+      amount,
+      nodes.map((node) => node.total),
+    );
+    nodes.forEach((node, index) => {
+      node.share = parts[index] ?? 0;
+    });
   };
-  place(tops);
-  // The top level is exact; deeper levels are rounded shares of the same whole.
-  const exact = shares(
-    tops.map((node) => node.total),
-    total,
-  );
-  tops.forEach((node, index) => (node.share = exact[index] ?? 0));
+  const descend = (node: CategorySpend) => {
+    const parts = allocate(node.share, [...node.children.map((child) => child.total), node.own]);
+    node.children.forEach((child, index) => {
+      child.share = parts[index] ?? 0;
+      descend(child);
+    });
+  };
+  give(tops, 10_000);
+  tops.forEach(descend);
 
-  result.total = total;
+  result.total = tops.reduce((sum, node) => sum + node.total, 0);
   result.categories = tops;
   return result;
 }

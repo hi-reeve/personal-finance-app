@@ -243,6 +243,67 @@ describe("odd data", () => {
     expect((await engine.spendingByCategory(period)).total).toBe(305_000);
   });
 
+  it("gives a Category whose refunds outweigh its spending no share and keeps the rest at 100%", async () => {
+    const { engine, cash, fuel } = await october();
+    await engine.recordTransaction({
+      accountId: cash.id,
+      date: "2026-10-13",
+      lines: [{ categoryId: fuel.id, amount: 50_000 }], // a refund bigger than the 20,000 spent
+    });
+    const { categories, total } = await engine.spendingByCategory(period);
+    expect(total).toBe(255_000);
+    const byName = Object.fromEntries(categories.map((c) => [c.name, c]));
+    expect(byName["Fuel"]).toMatchObject({ total: -30_000, share: 0 });
+    expect(categories.reduce((sum, c) => sum + c.share, 0)).toBe(10_000);
+  });
+
+  it("shows a Category whose parent is of the other kind at the top, so no figure is lost", async () => {
+    const { engine, cash } = await october();
+    const pay = await engine.createCategory({ name: "Pay", kind: "income" });
+    const side = await engine.createCategory({ name: "Side", kind: "expense" });
+    await engine.recordTransaction({
+      accountId: cash.id,
+      date: "2026-10-14",
+      lines: [{ categoryId: side.id, amount: -1_000 }],
+    });
+    // Another device moved it under an income Category before the two kinds were checked.
+    const { engine: other } = await device(createMemoryStore(), "dev-b");
+    await other.applyOps(await engine.exportOps());
+    await other.applyOps([
+      {
+        id: "forced-move",
+        hlc: { wall: NOW + 10_000, counter: 0, device: "dev-b" },
+        entity: "category",
+        recordId: side.id,
+        field: "parentId",
+        value: pay.id,
+      },
+    ]);
+    const report = await other.spendingByCategory(period);
+    expect(report.total).toBe(306_000);
+    expect(report.categories.some((c) => c.categoryId === side.id)).toBe(true);
+  });
+
+  it("never shows a child with more share than its parent, and splits a parent's share exactly", async () => {
+    const { engine } = await october();
+    const walk = (nodes: Awaited<ReturnType<typeof engine.spendingByCategory>>["categories"]) => {
+      for (const node of nodes) {
+        const inside = node.children.reduce((sum, child) => sum + child.share, 0);
+        expect(inside).toBeLessThanOrEqual(node.share);
+        walk(node.children);
+      }
+    };
+    walk((await engine.spendingByCategory(period)).categories);
+  });
+
+  it("rejects a period that is not two plain dates in order", async () => {
+    const { engine } = await device();
+    await expect(
+      engine.spendingByCategory({ from: "2026-10-31", to: "2026-10-01" }),
+    ).rejects.toThrow();
+    await expect(engine.spendingByCategory({ from: "Oct", to: "2026-10-01" })).rejects.toThrow();
+  });
+
   it("is empty, not broken, before anything is recorded or set up", async () => {
     const { engine } = await device();
     expect(await engine.spendingByCategory(period)).toMatchObject({

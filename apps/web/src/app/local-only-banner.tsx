@@ -41,7 +41,7 @@ export function LocalOnlyBanner() {
     syncOn: false,
     setupAt: app.settings.setupAt,
     now,
-    transactions: app.transactions,
+    transactions: app.activity.length,
     ...(dismissedUntil !== undefined ? { dismissedUntil } : {}),
   });
   if (level === "none") return null;

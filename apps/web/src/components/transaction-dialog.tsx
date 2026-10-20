@@ -32,7 +32,10 @@ function TransactionForm({
   const { t, money, numberFormat } = useLocale();
   const open = app.accounts.filter((a) => a.archivedAt === undefined);
   const line = transaction?.lines[0];
-  const defaultAccount = app.settings.defaultAccountId ?? open[0]?.id;
+  // The chosen default, else the Account used last, else the first one.
+  const lastUsed = app.activity.find((tx) => open.some((a) => a.id === tx.accountId))?.accountId;
+  const chosen = open.find((a) => a.id === app.settings.defaultAccountId)?.id;
+  const defaultAccount = chosen ?? lastUsed ?? open[0]?.id;
   const [accountId, setAccountId] = useState(transaction?.accountId ?? defaultAccount ?? "");
   const account = app.accounts.find((a) => a.id === accountId);
   const currency = account?.currency ?? app.settings.baseCurrency ?? "USD";
@@ -53,6 +56,7 @@ function TransactionForm({
     const magnitude = parseMoney(amount, currency, { numberFormat });
     const category = app.categories.find((c) => c.id === categoryId);
     if (account === undefined) return setProblem(t.tx_need_account());
+    if (date === "") return setProblem(t.tx_need_date());
     if (magnitude === undefined || magnitude <= 0)
       return setProblem(t.tx_invalid_amount({ example }));
     if (category === undefined) return setProblem(t.tx_need_category());
@@ -176,7 +180,12 @@ export function TransactionDialog({
   const { t } = useLocale();
   const app = useApp();
   return (
-    <Dialog.Root open={open} onOpenChange={(details) => onOpenChange(details.open)}>
+    <Dialog.Root
+      lazyMount
+      unmountOnExit
+      open={open}
+      onOpenChange={(details) => onOpenChange(details.open)}
+    >
       <Portal>
         <Dialog.Backdrop className="fixed inset-0 z-30 bg-ink/40" />
         <Dialog.Positioner className="fixed inset-0 z-40 flex items-end justify-center md:items-center">
@@ -184,7 +193,7 @@ export function TransactionDialog({
             <Dialog.Title className="text-lg font-semibold">
               {transaction === undefined ? t.add_transaction() : t.tx_title_edit()}
             </Dialog.Title>
-            {open && app.status === "ready" && (
+            {app.status === "ready" && (
               <TransactionForm
                 app={app}
                 {...(transaction ? { transaction } : {})}
@@ -192,7 +201,7 @@ export function TransactionDialog({
               />
             )}
             {app.status !== "ready" && (
-              <p className="mt-2 text-sm text-ink-muted">{t.add_placeholder()}</p>
+              <p className="mt-2 text-sm text-ink-muted">{t.app_loading()}</p>
             )}
             <Dialog.CloseTrigger
               className={`mt-4 min-h-11 rounded-lg border border-control px-4 ${FOCUS}`}

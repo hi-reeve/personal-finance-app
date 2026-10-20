@@ -22,7 +22,9 @@ function Activity() {
 function List({ app }: { app: ReadyState }) {
   const { t, money, date } = useLocale();
   const label = useCategoryLabel(app.categories);
+  // Kept after the dialog closes so its title does not change while it animates away.
   const [editing, setEditing] = useState<Transaction | undefined>(undefined);
+  const [editOpen, setEditOpen] = useState(false);
   const [asking, setAsking] = useState<string | undefined>(undefined);
   const [problem, setProblem] = useState<string | undefined>(undefined);
   const accounts = new Map(app.accounts.map((a) => [a.id, a]));
@@ -70,7 +72,10 @@ function List({ app }: { app: ReadyState }) {
                   <Amount
                     direction={income ? "income" : "expense"}
                     variant="list"
-                    formatted={money(Math.abs(tx.total), account?.currency ?? "USD")}
+                    formatted={money(
+                      Math.abs(tx.total),
+                      account?.currency ?? app.settings.baseCurrency ?? "USD",
+                    )}
                   />
                 </div>
                 {asking === tx.id ? (
@@ -79,7 +84,12 @@ function List({ app }: { app: ReadyState }) {
                     <button type="button" className={BUTTON} onClick={() => remove(tx.id)}>
                       {t.activity_delete_yes()}
                     </button>
-                    <button type="button" className={BUTTON} onClick={() => setAsking(undefined)}>
+                    <button
+                      type="button"
+                      className={BUTTON}
+                      autoFocus
+                      onClick={() => setAsking(undefined)}
+                    >
                       {t.activity_cancel()}
                     </button>
                   </div>
@@ -90,9 +100,12 @@ function List({ app }: { app: ReadyState }) {
                         type="button"
                         className={BUTTON}
                         aria-label={t.activity_edit({ label: title })}
-                        onClick={() => setEditing(tx)}
+                        onClick={() => {
+                          setEditing(tx);
+                          setEditOpen(true);
+                        }}
                       >
-                        {t.accounts_change()}
+                        {t.activity_edit_button()}
                       </button>
                     )}
                     <button
@@ -101,7 +114,7 @@ function List({ app }: { app: ReadyState }) {
                       aria-label={t.activity_delete({ label: title })}
                       onClick={() => setAsking(tx.id)}
                     >
-                      {t.activity_delete_yes()}
+                      {t.activity_delete_button()}
                     </button>
                   </div>
                 )}
@@ -111,8 +124,8 @@ function List({ app }: { app: ReadyState }) {
         </ul>
       )}
       <TransactionDialog
-        open={editing !== undefined}
-        onOpenChange={(open) => !open && setEditing(undefined)}
+        open={editOpen}
+        onOpenChange={setEditOpen}
         {...(editing ? { transaction: editing } : {})}
       />
     </Page>

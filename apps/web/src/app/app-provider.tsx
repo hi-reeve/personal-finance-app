@@ -51,7 +51,6 @@ export interface AccountView extends Account {
 export interface Snapshot {
   settings: Settings;
   accounts: AccountView[];
-  transactions: number;
   /** Live Transactions, newest first. */
   activity: Transaction[];
   categories: Category[];
@@ -103,7 +102,6 @@ async function snapshot(engine: Engine): Promise<Snapshot> {
   return {
     settings: engine.getSettings(),
     accounts,
-    transactions: transactions.length,
     activity: [...transactions].sort(newestFirst),
     categories,
     categoryUse,

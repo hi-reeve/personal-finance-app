@@ -33,7 +33,6 @@
   "nav_label": "Main",
   "add_transaction": "Add transaction",
   "add_close": "Close",
-  "add_placeholder": "Add transactions here once you are set up.",
   "app_name": "Personal finance",
   "skip_to_content": "Skip to content",
   "section_storage": "Storage",
@@ -162,5 +161,8 @@
   "activity_delete_yes": "Delete",
   "activity_cancel": "Cancel",
   "category_balance_adjustment": "Balance adjustment",
-  "category_missing": "Deleted category"
+  "category_missing": "Deleted category",
+  "activity_edit_button": "Edit",
+  "activity_delete_button": "Delete",
+  "tx_need_date": "Choose a date."
 }

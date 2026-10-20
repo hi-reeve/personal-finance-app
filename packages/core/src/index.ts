@@ -1,3 +1,9 @@
+export {
+  filterActivity,
+  type ActivityEntry,
+  type ActivityFilter,
+  type ActivityKind,
+} from "./activity-filter";
 export { createMemoryStore, type Clock, type OpStore, type Random } from "./adapters";
 export {
   dismissFullBannerUntil,

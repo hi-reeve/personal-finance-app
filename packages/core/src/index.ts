@@ -25,6 +25,7 @@ export {
   type EngineOptions,
   type Line,
   type LinePatch,
+  type LineUpdate,
   type NewAccount,
   type NewCategory,
   type NewLine,

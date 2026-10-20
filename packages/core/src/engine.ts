@@ -139,6 +139,11 @@ export type TransactionPatch = Partial<Omit<NewTransaction, "lines">>;
 
 export type LinePatch = Partial<NewLine>;
 
+/** One Line of an updated Transaction: with an `id` it changes that Line, without one it is new. */
+export interface LineUpdate extends NewLine {
+  id?: string;
+}
+
 export interface EngineOptions {
   deviceId: string;
   clock: Clock;
@@ -150,6 +155,16 @@ export interface Engine {
   recordTransaction(input: NewTransaction): Promise<Transaction>;
   editTransaction(id: string, patch: TransactionPatch): Promise<void>;
   editLine(transactionId: string, lineId: string, patch: LinePatch): Promise<void>;
+  /**
+   * Sets the header fields and the full list of Lines in one write: Lines with an id are changed,
+   * Lines without one are added, and Lines left out are removed. An empty `itemName` clears it.
+   * Either everything applies or nothing does.
+   */
+  updateTransaction(
+    id: string,
+    patch: TransactionPatch,
+    lines: readonly LineUpdate[],
+  ): Promise<Transaction>;
   /** Marks the Transaction deleted with a tombstone; history stays in the op log. */
   deleteTransaction(id: string): Promise<void>;
   getTransaction(id: string): Promise<Transaction | undefined>;
@@ -316,9 +331,19 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
     return value === undefined ? undefined : String(value);
   }
 
+  /** Lines keep the order they were added in, which every device agrees on. */
+  function lineOrder(a: string, b: string): number {
+    return (
+      compareHlc(
+        lines.get(a)!.get("transactionId")!.hlc,
+        lines.get(b)!.get("transactionId")!.hlc,
+      ) || (a < b ? -1 : 1)
+    );
+  }
+
   function readLine(lineId: string): Line {
     const f = lines.get(lineId)!;
-    const itemName = text(f, "itemName");
+    const itemName = text(f, "itemName") || undefined;
     return {
       id: lineId,
       categoryId: resolveCategory(text(f, "categoryId")!),
@@ -330,7 +355,9 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
   function readTransaction(id: string): Transaction | undefined {
     if (!isLive(id)) return undefined;
     const f = transactions.get(id)!;
-    const owned = [...(lineIdsByTransaction.get(id) ?? [])].sort();
+    const owned = [...(lineIdsByTransaction.get(id) ?? [])]
+      .filter((lineId) => !lines.get(lineId)!.has("deletedAt"))
+      .sort(lineOrder);
     const time = text(f, "time") || undefined;
     const payee = text(f, "payee") || undefined;
     const note = text(f, "note") || undefined;
@@ -660,6 +687,39 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
       }
       if (patch.amount !== undefined) assertAmount(patch.amount);
       await commit(opsFor("line", lineId, pick(patch, LINE_FIELDS)));
+    },
+    async updateTransaction(id, patch, updates) {
+      assertLive(id);
+      validateTransactionFields(patch);
+      if (patch.accountId !== undefined) assertOpenForTransactions(patch.accountId);
+      if (updates.length === 0) throw new Error("A Transaction needs at least one Line");
+      const owned = [...(lineIdsByTransaction.get(id) ?? [])].filter(
+        (lineId) => !lines.get(lineId)!.has("deletedAt"),
+      );
+      const ids = updates.flatMap((update) => (update.id !== undefined ? [update.id] : []));
+      if (new Set(ids).size !== ids.length) throw new Error("A Line appears more than once");
+      for (const update of updates) {
+        assertAmount(update.amount);
+        if (update.id !== undefined && !owned.includes(update.id))
+          throw new Error(`Line ${update.id} does not belong to Transaction ${id}`);
+      }
+      const kept = new Set(
+        updates.flatMap((update) => (update.id !== undefined ? [update.id] : [])),
+      );
+      const ops = opsFor("transaction", id, pick(patch, TRANSACTION_FIELDS));
+      for (const update of updates) {
+        const lineId = update.id ?? newUuidV7(clock, random);
+        ops.push(
+          ...opsFor("line", lineId, {
+            ...(update.id === undefined ? { transactionId: id } : {}),
+            ...pick(update, LINE_FIELDS),
+          }),
+        );
+      }
+      for (const lineId of owned)
+        if (!kept.has(lineId)) ops.push(...opsFor("line", lineId, { deletedAt: clock.now() }));
+      await commit(ops);
+      return readTransaction(id)!;
     },
     async deleteTransaction(id) {
       assertLive(id);

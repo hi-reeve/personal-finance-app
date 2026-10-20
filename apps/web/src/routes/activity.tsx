@@ -6,7 +6,7 @@ import { Amount } from "../components/amount";
 import { useCategoryLabel } from "../components/category-label";
 import { useLocale } from "../components/locale";
 import { Page } from "../components/page";
-import { TransactionDialog, isSimple } from "../components/transaction-dialog";
+import { TransactionDialog, isEditable } from "../components/transaction-dialog";
 
 export const Route = createFileRoute("/activity")({ component: Activity });
 
@@ -28,6 +28,8 @@ function List({ app }: { app: ReadyState }) {
   const [asking, setAsking] = useState<string | undefined>(undefined);
   const [problem, setProblem] = useState<string | undefined>(undefined);
   const accounts = new Map(app.accounts.map((a) => [a.id, a]));
+  const currencyOf = (tx: Transaction) =>
+    accounts.get(tx.accountId)?.currency ?? app.settings.baseCurrency ?? "USD";
 
   async function remove(id: string) {
     setProblem(undefined);
@@ -65,6 +67,24 @@ function List({ app }: { app: ReadyState }) {
                         .filter(Boolean)
                         .join(" · ")}
                     </span>
+                    {tx.lines.length > 1 && (
+                      <ul className="mt-1 flex flex-col gap-0.5 text-sm text-ink-muted">
+                        {tx.lines.map((line) => (
+                          <li key={line.id} className="flex justify-between gap-3">
+                            <span className="truncate">
+                              {line.itemName !== undefined
+                                ? `${line.itemName} · ${label(line.categoryId)}`
+                                : label(line.categoryId)}
+                            </span>
+                            <Amount
+                              direction="neutral"
+                              variant="list"
+                              formatted={money(Math.abs(line.amount), currencyOf(tx))}
+                            />
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                     {tx.note !== undefined && (
                       <span className="block truncate text-sm text-ink-muted">{tx.note}</span>
                     )}
@@ -95,7 +115,7 @@ function List({ app }: { app: ReadyState }) {
                   </div>
                 ) : (
                   <div className="mt-3 flex flex-wrap gap-2">
-                    {isSimple(tx) && (
+                    {isEditable(tx) && (
                       <button
                         type="button"
                         className={BUTTON}

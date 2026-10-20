@@ -4,6 +4,7 @@ import { newUuidV7 } from "./ids";
 import type { Entity, Op, OpValue } from "./ops";
 import { currencyCodes, type CurrencyCode } from "./format";
 import { convertMinor, normalizeRate } from "./rates";
+import { spendingByCategory, type SpendingByCategory, type SpendingQuery } from "./reports";
 import {
   assertAccountColor,
   assertAccountIcon,
@@ -299,6 +300,11 @@ export interface Engine {
    * with no rate.
    */
   getBaseAmounts(transactionId: string): Promise<{ lines: number[]; total: number } | undefined>;
+  /**
+   * What was spent (or earned) in a period, by Category, with drill-down and shares, in the base
+   * currency "as recorded". See `spendingByCategory` for the counting rules.
+   */
+  spendingByCategory(query: SpendingQuery): Promise<SpendingByCategory>;
   /** Live Transactions, oldest date first. A Transfer's fee is included; the Transfer is not. */
   listTransactions(): Promise<Transaction[]>;
   /** Every op this device holds, to send to another device. */
@@ -1286,6 +1292,18 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
       if (tx.rate === undefined) return undefined;
       const converted = tx.lines.map((line) => convertMinor(line.amount, tx.rate!, currency, base));
       return { lines: converted, total: converted.reduce((sum, amount) => sum + amount, 0) };
+    },
+    async spendingByCategory(query) {
+      return spendingByCategory({
+        ...query,
+        base: readSettings().baseCurrency,
+        transactions: [...transactions.keys()].flatMap((id) => readTransaction(id) ?? []),
+        accountCurrency: new Map(
+          [...accounts.entries()].map(([id, f]) => [id, text(f, "currency") as CurrencyCode]),
+        ),
+        categories: allCategories(),
+        excluded: new Set([BALANCE_ADJUSTMENT_CATEGORY]),
+      });
     },
     async listTransactions() {
       const live = [...transactions.keys()].flatMap((id) => readTransaction(id) ?? []);

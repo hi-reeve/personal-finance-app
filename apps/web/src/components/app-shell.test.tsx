@@ -108,8 +108,11 @@ describe("Add", () => {
     fireEvent.click(within(nav("phone")).getByRole("button", { name: "Add" }));
     const dialog = await screen.findByRole("dialog", { name: "Add transaction" });
     expect(dialog).toBeTruthy();
-    fireEvent.keyDown(dialog, { key: "Escape" });
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    // The dialog starts listening for Escape a moment after it opens, so press it until it closes.
+    await waitFor(() => {
+      fireEvent.keyDown(dialog, { key: "Escape" });
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
   });
 
   it("opens from the floating button, which lives outside every nav", async () => {

@@ -888,12 +888,16 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
     rateRequired = true,
   ): Record<string, OpValue | undefined> {
     const out: Record<string, OpValue | undefined> = {};
-    if (patch.accountId !== undefined || patch.rate !== undefined) {
+    const moved =
+      patch.accountId !== undefined &&
+      (current === undefined || patch.accountId !== current.accountId);
+    // An edit that keeps the Account and gives no rate leaves the stored rate alone, so an old
+    // Transaction from before rates existed can still be edited.
+    if (moved || patch.rate !== undefined) {
       const accountId = patch.accountId ?? current!.accountId;
-      const moved = current === undefined || accountId !== current.accountId;
       out["rate"] = resolveRate(
         accountId,
-        moved ? patch.rate : (patch.rate ?? current.rate),
+        moved ? patch.rate : (patch.rate ?? current?.rate),
         rateRequired,
       );
     }
@@ -1244,9 +1248,10 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
       else if (fee !== undefined) next.fee = fee;
       checkTransfer(next, current, fee !== undefined);
       // A changed fee is checked against the sending Account; an untouched one keeps its rate.
+      const movedFrom = next.fromAccountId !== current.fromAccountId;
       const feeRate = next.fee
-        ? fee !== undefined
-          ? resolveRate(next.fromAccountId, next.fee.rate)
+        ? fee !== undefined || movedFrom
+          ? resolveRate(next.fromAccountId, fee ? fee.rate : undefined)
           : (current.fee?.rate ?? "")
         : "";
       await commit([

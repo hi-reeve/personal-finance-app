@@ -146,6 +146,17 @@ describe("rate sources", () => {
     expect(urls).toEqual(["https://api.frankfurter.dev/v1/2026-10-18?base=USD&symbols=IDR"]);
   });
 
+  it("both sources refuse a date that is not a plain calendar date, so nothing odd reaches a URL", async () => {
+    let asked = 0;
+    const getJson = async () => {
+      asked += 1;
+      return {};
+    };
+    for (const fetcher of [frankfurterFetcher(getJson), currencyApiFetcher(getJson)])
+      expect(await fetcher("../x?y=1", "USD", "IDR")).toBeUndefined();
+    expect(asked).toBe(0);
+  });
+
   it("Frankfurter: a currency it does not list is a miss, not a crash", async () => {
     const fetcher = frankfurterFetcher(async () => ({ rates: {} }));
     expect(await fetcher("2026-10-18", "USD", "XXX" as never)).toBeUndefined();

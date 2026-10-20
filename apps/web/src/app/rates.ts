@@ -27,7 +27,12 @@ const cache: RateCacheStore = {
 };
 
 const getJson: GetJson = async (url) => {
-  const response = await fetch(url, { signal: AbortSignal.timeout(8_000) });
+  // Only the day and the two currencies are asked; no cookies and no referrer go with it.
+  const response = await fetch(url, {
+    signal: AbortSignal.timeout(8_000),
+    credentials: "omit",
+    referrerPolicy: "no-referrer",
+  });
   if (!response.ok) throw new Error(`Rate source answered ${response.status}`);
   return response.json();
 };

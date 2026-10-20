@@ -1,6 +1,7 @@
 import { currencyExponent, type CurrencyCode } from "./format";
 
 const MAX_FRACTION_DIGITS = 12;
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
  * A rate is plain decimal text so no float ever touches money: how many units of the second
@@ -119,6 +120,7 @@ function field(value: unknown, key: string): unknown {
 /** Frankfurter (European Central Bank rates). Answers for the latest business day on or before the date. */
 export function frankfurterFetcher(getJson: GetJson): RateFetcher {
   return async (date, from, to) => {
+    if (!ISO_DATE.test(date)) return undefined;
     const body = await getJson(`https://api.frankfurter.dev/v1/${date}?base=${from}&symbols=${to}`);
     return asRate(field(field(body, "rates"), to));
   };
@@ -127,6 +129,7 @@ export function frankfurterFetcher(getJson: GetJson): RateFetcher {
 /** A second, free source that keeps a file per day. Used when Frankfurter has no answer. */
 export function currencyApiFetcher(getJson: GetJson): RateFetcher {
   return async (date, from, to) => {
+    if (!ISO_DATE.test(date)) return undefined;
     const base = from.toLowerCase();
     const body = await getJson(
       `https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@${date}/v1/currencies/${base}.json`,

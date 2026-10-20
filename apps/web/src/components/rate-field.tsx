@@ -1,5 +1,5 @@
 import { convertMinor, type CurrencyCode } from "@pfa/core";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { formatRateInput, parseRateInput } from "../app/rate-input";
 import { rateProvider } from "../app/rates";
 import { useLocale } from "./locale";
@@ -35,6 +35,7 @@ export function RateField({
   const { t, money, numberFormat } = useLocale();
   const [status, setStatus] = useState<Status>("idle");
   const typed = useRef(value !== "");
+  const helpId = useId();
   const send = useRef(onChange);
   send.current = onChange;
 
@@ -45,9 +46,11 @@ export function RateField({
     void rateProvider.lookup(date, from, to).then((found) => {
       if (!live) return;
       if (found === undefined) return setStatus("missing");
+      // A rate the user typed, or one already saved on the Transaction, is not overwritten, and
+      // then the field makes no claim about where its number came from.
+      if (typed.current) return setStatus("idle");
       setStatus(found.source === "cache" ? "cache" : "network");
-      // A rate the user typed, or one already saved on the Transaction, is not overwritten.
-      if (!typed.current) send.current(formatRateInput(found.rate, numberFormat));
+      send.current(formatRateInput(found.rate, numberFormat));
     });
     return () => {
       live = false;
@@ -79,7 +82,7 @@ export function RateField({
           className={FIELD}
           inputMode="decimal"
           aria-invalid={invalid === true || (value !== "" && parsed === undefined)}
-          aria-describedby="rate-help"
+          aria-describedby={helpId}
           value={value}
           onChange={(e) => {
             typed.current = true;
@@ -87,8 +90,8 @@ export function RateField({
           }}
         />
       </label>
-      <p id="rate-help" className="text-sm text-ink-muted" aria-live="polite">
-        {statusText}
+      <p id={helpId} className="text-sm text-ink-muted">
+        <span aria-live="polite">{statusText}</span>
         {preview !== undefined && ` ${t.rate_preview({ amount: preview })}`}
         {value !== "" && parsed === undefined && ` ${t.rate_invalid({ example })}`}
       </p>

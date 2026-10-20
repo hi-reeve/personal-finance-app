@@ -142,6 +142,18 @@ describe("a Transaction in another currency", () => {
     expect((await engine.getTransaction(tx.id))!.rate).toBe("16100");
   });
 
+  it("keeps the stored rate when an edit names the same Account without a rate", async () => {
+    const { engine, card, food } = await withAccounts();
+    const tx = await engine.recordTransaction({
+      accountId: card.id,
+      date: "2026-10-18",
+      rate: "16000",
+      lines: [{ categoryId: food.id, amount: -1_000 }],
+    });
+    await engine.editTransaction(tx.id, { accountId: card.id, note: "same account" });
+    expect((await engine.getTransaction(tx.id))!.rate).toBe("16000");
+  });
+
   it("lets an unrelated edit through even on an old Transaction that has no rate", async () => {
     const { engine, store, card, food } = await withAccounts();
     const tx = await engine.recordTransaction({
@@ -156,6 +168,9 @@ describe("a Transaction in another currency", () => {
     await old.applyOps(oldOps);
     expect((await old.getTransaction(tx.id))!.rate).toBeUndefined();
     await expect(old.editTransaction(tx.id, { note: "ok" })).resolves.toBeUndefined();
+    await expect(
+      old.editTransaction(tx.id, { accountId: card.id, note: "from the form" }),
+    ).resolves.toBeUndefined();
     expect(await old.getBaseAmounts(tx.id)).toBeUndefined();
   });
 });
@@ -229,6 +244,34 @@ describe("a Transfer fee in another currency", () => {
     expect(transfer.fee).toEqual({ amount: 50, categoryId: food.id, rate: "16000" });
     const fee = (await engine.listTransactions())[0]!;
     expect((await engine.getBaseAmounts(fee.id))!.total).toBe(-8_000);
+  });
+});
+
+describe("moving a Transfer's sending Account", () => {
+  it("asks for a fresh fee rate and never carries the old Account's rate over", async () => {
+    const { engine, wallet, card, food } = await withAccounts();
+    const spare = await engine.createAccount({
+      name: "Spare",
+      kind: "cash",
+      currency: "IDR",
+      openingBalance: 5_000_000,
+    });
+    const transfer = await engine.recordTransfer({
+      date: "2026-10-18",
+      fromAccountId: card.id,
+      toAccountId: wallet.id,
+      fromAmount: 1_000,
+      toAmount: 16_000_000,
+      fee: { amount: 50, categoryId: food.id, rate: "16000" },
+    });
+    // The new sending Account is in the base currency: no rate belongs on the fee.
+    await engine.updateTransfer(transfer.id, { fromAccountId: spare.id, fromAmount: 16_000_000 });
+    expect((await engine.getTransfer(transfer.id))!.fee).toEqual({
+      amount: 50,
+      categoryId: food.id,
+    });
+    const fee = (await engine.listTransactions())[0]!;
+    expect(fee.rate).toBeUndefined();
   });
 });
 

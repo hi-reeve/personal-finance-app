@@ -1,4 +1,10 @@
-import { BALANCE_ADJUSTMENT_CATEGORY, parseMoney, signedAmount, type Transaction } from "@pfa/core";
+import {
+  BALANCE_ADJUSTMENT_CATEGORY,
+  parseMoney,
+  signedAmount,
+  type Transaction,
+  type Transfer,
+} from "@pfa/core";
 import { Dialog } from "@ark-ui/react/dialog";
 import { Portal } from "@ark-ui/react/portal";
 import { Link } from "@tanstack/react-router";
@@ -6,6 +12,7 @@ import { useRef, useState, type FormEvent } from "react";
 import { useApp, type ReadyState } from "../app/app-provider";
 import { today } from "../app/today";
 import { useCategoryLabel } from "./category-label";
+import { TransferForm } from "./transfer-form";
 import { CategoryPicker } from "./category-picker";
 import { useLocale } from "./locale";
 
@@ -299,18 +306,32 @@ function TransactionForm({
   );
 }
 
-/** Add a Transaction, or edit one. Opens as a bottom sheet on a phone and a dialog elsewhere. */
+/** Add a Transaction or Transfer, or edit one. A bottom sheet on a phone, a dialog elsewhere. */
 export function TransactionDialog({
   open,
   onOpenChange,
   transaction,
+  transfer,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   transaction?: Transaction;
+  transfer?: Transfer;
 }) {
   const { t } = useLocale();
   const app = useApp();
+  const editing = transaction !== undefined || transfer !== undefined;
+  // Adding starts as a Transaction; editing is fixed to what is being edited.
+  const [chosen, setChosen] = useState<"transaction" | "transfer">("transaction");
+  const mode =
+    transfer !== undefined ? "transfer" : transaction !== undefined ? "transaction" : chosen;
+  const title = !editing
+    ? mode === "transfer"
+      ? t.tr_title_add()
+      : t.add_transaction()
+    : mode === "transfer"
+      ? t.tr_title_edit()
+      : t.tx_title_edit();
   return (
     <Dialog.Root
       lazyMount
@@ -322,13 +343,33 @@ export function TransactionDialog({
         <Dialog.Backdrop className="fixed inset-0 z-30 bg-ink/40" />
         <Dialog.Positioner className="fixed inset-0 z-40 flex items-end justify-center md:items-center">
           <Dialog.Content className="max-h-[92dvh] md:max-h-[calc(100dvh-6rem)] w-full overflow-y-auto rounded-t-2xl border border-line bg-surface p-5 text-ink shadow-xl md:max-w-md md:rounded-2xl">
-            <Dialog.Title className="text-lg font-semibold">
-              {transaction === undefined ? t.add_transaction() : t.tx_title_edit()}
-            </Dialog.Title>
-            {app.status === "ready" && (
+            <Dialog.Title className="text-lg font-semibold">{title}</Dialog.Title>
+            {!editing && app.status === "ready" && (
+              <div role="group" aria-label={t.mode_label()} className="mt-3 flex gap-2">
+                {(["transaction", "transfer"] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    aria-pressed={mode === m}
+                    onClick={() => setChosen(m)}
+                    className={`min-h-11 flex-1 rounded-lg border border-control px-3 aria-pressed:border-accent aria-pressed:bg-accent aria-pressed:text-on-accent ${FOCUS}`}
+                  >
+                    {m === "transaction" ? t.mode_transaction() : t.mode_transfer()}
+                  </button>
+                ))}
+              </div>
+            )}
+            {app.status === "ready" && mode === "transaction" && (
               <TransactionForm
                 app={app}
                 {...(transaction ? { transaction } : {})}
+                onDone={() => onOpenChange(false)}
+              />
+            )}
+            {app.status === "ready" && mode === "transfer" && (
+              <TransferForm
+                app={app}
+                {...(transfer ? { transfer } : {})}
                 onDone={() => onOpenChange(false)}
               />
             )}

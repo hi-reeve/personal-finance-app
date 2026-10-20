@@ -44,14 +44,16 @@ for (const layout of Object.keys(SIZES) as Layout[]) {
     await add.click();
     const dialog = page.getByRole("dialog", { name: "Add transaction" });
     await expect(dialog).toBeVisible();
-    const box = (await dialog.boundingBox())!;
     const viewport = SIZES[layout];
-    if (layout === "phone") {
-      expect(box.y + box.height).toBeCloseTo(viewport.height, -1);
-    } else {
-      expect(box.y).toBeGreaterThan(40);
-      expect(box.y + box.height).toBeLessThan(viewport.height - 40);
-    }
+    // Measure once it has stopped moving into place.
+    await expect
+      .poll(async () => {
+        const box = (await dialog.boundingBox())!;
+        return layout === "phone"
+          ? Math.abs(box.y + box.height - viewport.height) < 10
+          : box.y > 40 && box.y + box.height < viewport.height - 40;
+      })
+      .toBe(true);
     await page.keyboard.press("Escape");
     await expect(dialog).toBeHidden();
   });

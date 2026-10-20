@@ -63,6 +63,40 @@ export interface Tag {
   name: string;
 }
 
+/** Money moved between two of the user's own Accounts. Not income or expense. */
+export interface Transfer {
+  id: string;
+  fromAccountId: string;
+  toAccountId: string;
+  /** Calendar date, plain text `YYYY-MM-DD`. */
+  date: string;
+  time?: string;
+  note?: string;
+  /** Leaves the from Account, in its currency. Whole minor units above zero. */
+  fromAmount: number;
+  /** Arrives in the to Account, in its currency. Equals `fromAmount` when the currencies match. */
+  toAmount: number;
+  /** Charged to the from Account and recorded as spending in an expense Category. */
+  fee?: { amount: number; categoryId: string };
+  createdAt: number;
+}
+
+export interface NewTransfer {
+  fromAccountId: string;
+  toAccountId: string;
+  date: string;
+  time?: string;
+  note?: string;
+  fromAmount: number;
+  toAmount: number;
+  fee?: { amount: number; categoryId: string };
+}
+
+/** `fee: null` removes the fee. An empty `time` or `note` clears it. */
+export type TransferPatch = Partial<Omit<NewTransfer, "fee">> & {
+  fee?: { amount: number; categoryId: string } | null;
+};
+
 export interface Transaction {
   id: string;
   accountId: string;
@@ -73,6 +107,8 @@ export interface Transaction {
   payee?: string;
   note?: string;
   lines: Line[];
+  /** Set on a Transfer's fee, which is changed through its Transfer. */
+  transferId?: string;
   /** Tags on the Transaction, by id. Absent when there are none. */
   tagIds?: string[];
   /** Always the sum of the Lines; never stored. */
@@ -222,7 +258,15 @@ export interface Engine {
   listTags(): Promise<Tag[]>;
   tagTransaction(transactionId: string, tagId: string): Promise<void>;
   untagTransaction(transactionId: string, tagId: string): Promise<void>;
-  /** Live Transactions, oldest date first. */
+  recordTransfer(input: NewTransfer): Promise<Transfer>;
+  /** Changes a Transfer and its fee in one write. */
+  updateTransfer(id: string, patch: TransferPatch): Promise<Transfer>;
+  /** Deletes the Transfer and its fee with tombstones. */
+  deleteTransfer(id: string): Promise<void>;
+  getTransfer(id: string): Promise<Transfer | undefined>;
+  /** Live Transfers, oldest date first. */
+  listTransfers(): Promise<Transfer[]>;
+  /** Live Transactions, oldest date first. A Transfer's fee is included; the Transfer is not. */
   listTransactions(): Promise<Transaction[]>;
   /** Every op this device holds, to send to another device. */
   exportOps(): Promise<Op[]>;
@@ -235,6 +279,15 @@ type Fields = Map<string, { value: OpValue; hlc: Hlc }>;
 const TRANSACTION_FIELDS = ["accountId", "date", "time", "payee", "note"] as const;
 const LINE_FIELDS = ["categoryId", "amount", "itemName"] as const;
 const ACCOUNT_FIELDS = ["name", "kind", "currency", "openingBalance", "icon", "color"] as const;
+const TRANSFER_FIELDS = [
+  "fromAccountId",
+  "toAccountId",
+  "date",
+  "time",
+  "note",
+  "fromAmount",
+  "toAmount",
+] as const;
 const SETTINGS_ID = "settings";
 
 const byId = (a: { id: string }, b: { id: string }) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
@@ -252,6 +305,7 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
   const categories = new Map<string, Fields>();
   const tags = new Map<string, Fields>();
   const taggings = new Map<string, Fields>();
+  const transfers = new Map<string, Fields>();
   const tables: Record<Entity, Map<string, Fields>> = {
     transaction: transactions,
     line: lines,
@@ -260,6 +314,7 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
     category: categories,
     tag: tags,
     tagging: taggings,
+    transfer: transfers,
   };
   const table = (entity: Entity) => tables[entity];
 
@@ -367,6 +422,7 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
     }
     const ownedLines = owned.map(readLine);
     const tagIds = tagsOn(id);
+    const transferId = text(f, "transferId") || undefined;
     return {
       id,
       accountId: text(f, "accountId")!,
@@ -375,6 +431,7 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
       ...(payee !== undefined ? { payee } : {}),
       ...(note !== undefined ? { note } : {}),
       lines: ownedLines,
+      ...(transferId !== undefined ? { transferId } : {}),
       ...(tagIds.length > 0 ? { tagIds } : {}),
       total: ownedLines.reduce((sum, line) => sum + line.amount, 0),
       createdAt: Number(f.get("createdAt")!.value),
@@ -635,6 +692,124 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
     );
   }
 
+  function isLiveTransfer(id: string): boolean {
+    const f = transfers.get(id);
+    return f !== undefined && !f.has("deletedAt");
+  }
+
+  function liveTransfers(): string[] {
+    return [...transfers.keys()].filter(isLiveTransfer);
+  }
+
+  /** The live Transaction that records a Transfer's fee, if it has one. */
+  function feeTransactionOf(transferId: string): string | undefined {
+    return [...transactions.keys()].find(
+      (id) => isLive(id) && text(transactions.get(id)!, "transferId") === transferId,
+    );
+  }
+
+  function readTransfer(id: string): Transfer {
+    const f = transfers.get(id)!;
+    const time = text(f, "time") || undefined;
+    const note = text(f, "note") || undefined;
+    const feeId = feeTransactionOf(id);
+    const feeLine = feeId !== undefined ? readTransaction(feeId)?.lines[0] : undefined;
+    return {
+      id,
+      fromAccountId: text(f, "fromAccountId")!,
+      toAccountId: text(f, "toAccountId")!,
+      date: text(f, "date")!,
+      ...(time !== undefined ? { time } : {}),
+      ...(note !== undefined ? { note } : {}),
+      fromAmount: Number(f.get("fromAmount")!.value),
+      toAmount: Number(f.get("toAmount")!.value),
+      ...(feeLine !== undefined
+        ? { fee: { amount: -feeLine.amount, categoryId: feeLine.categoryId } }
+        : {}),
+      createdAt: Number(f.get("createdAt")!.value),
+    };
+  }
+
+  function assertTransferLive(id: string) {
+    if (!isLiveTransfer(id)) throw new Error(`Transfer ${id} does not exist or was deleted`);
+  }
+
+  /** A Transfer's fee is edited and deleted through its Transfer. */
+  function assertNotFee(transactionId: string) {
+    if (text(transactions.get(transactionId)!, "transferId"))
+      throw new Error("This is a Transfer fee: change it through its Transfer");
+  }
+
+  function hasHistory(accountId: string): boolean {
+    return (
+      liveTransactionsOn(accountId).length > 0 ||
+      liveTransfers().some((id) => {
+        const f = transfers.get(id)!;
+        return text(f, "fromAccountId") === accountId || text(f, "toAccountId") === accountId;
+      })
+    );
+  }
+
+  function checkTransfer(next: NewTransfer, previous?: Transfer) {
+    assertDate(next.date);
+    if (next.time !== undefined && next.time !== "") assertTime(next.time);
+    if (next.fromAccountId === next.toAccountId)
+      throw new Error("A Transfer needs two different Accounts: not the same account");
+    for (const key of ["fromAccountId", "toAccountId"] as const) {
+      assertAccount(next[key]);
+      if (previous === undefined || previous[key] !== next[key])
+        assertOpenForTransactions(next[key]);
+    }
+    for (const amount of [next.fromAmount, next.toAmount]) {
+      assertAmount(amount);
+      if (amount <= 0) throw new Error("A Transfer amount must be above zero");
+    }
+    const from = readAccount(next.fromAccountId);
+    const to = readAccount(next.toAccountId);
+    if (from.currency === to.currency && next.fromAmount !== next.toAmount)
+      throw new Error("Accounts in the same currency must send and receive the same amount");
+    if (next.fee !== undefined) {
+      assertAmount(next.fee.amount);
+      if (next.fee.amount <= 0) throw new Error("A fee must be above zero");
+      assertCategory(next.fee.categoryId);
+      if (categoryKind(next.fee.categoryId) !== "expense")
+        throw new Error("A fee is spending: it needs an expense Category");
+    }
+  }
+
+  function feeOps(transferId: string, transfer: NewTransfer, existing: string | undefined): Op[] {
+    const fee = transfer.fee;
+    if (existing !== undefined) {
+      if (fee === undefined) return opsFor("transaction", existing, { deletedAt: clock.now() });
+      const lineId = [...(lineIdsByTransaction.get(existing) ?? [])].find(
+        (id) => !lines.get(id)!.has("deletedAt"),
+      )!;
+      return [
+        ...opsFor("transaction", existing, {
+          accountId: transfer.fromAccountId,
+          date: transfer.date,
+        }),
+        ...opsFor("line", lineId, { categoryId: fee.categoryId, amount: -fee.amount }),
+      ];
+    }
+    if (fee === undefined) return [];
+    const id = newUuidV7(clock, random);
+    const lineId = newUuidV7(clock, random);
+    return [
+      ...opsFor("transaction", id, {
+        accountId: transfer.fromAccountId,
+        date: transfer.date,
+        transferId,
+        createdAt: clock.now(),
+      }),
+      ...opsFor("line", lineId, {
+        transactionId: id,
+        categoryId: fee.categoryId,
+        amount: -fee.amount,
+      }),
+    ];
+  }
+
   function validateTransactionFields(values: TransactionPatch) {
     if (values.date !== undefined) assertDate(values.date);
     // An empty string clears the time.
@@ -651,7 +826,13 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
   function balanceOf(accountId: string): number {
     assertAccount(accountId);
     const opening = readAccount(accountId).openingBalance;
-    return liveTransactionsOn(accountId).reduce((sum, tx) => sum + tx.total, opening);
+    const spent = liveTransactionsOn(accountId).reduce((sum, tx) => sum + tx.total, opening);
+    return liveTransfers().reduce((sum, id) => {
+      const f = transfers.get(id)!;
+      const out = text(f, "fromAccountId") === accountId ? Number(f.get("fromAmount")!.value) : 0;
+      const into = text(f, "toAccountId") === accountId ? Number(f.get("toAmount")!.value) : 0;
+      return sum - out + into;
+    }, spent);
   }
 
   async function record(input: NewTransaction): Promise<Transaction> {
@@ -677,11 +858,13 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
     recordTransaction: record,
     async editTransaction(id, patch) {
       assertLive(id);
+      assertNotFee(id);
       validateTransactionFields(patch);
       await commit(opsFor("transaction", id, pick(patch, TRANSACTION_FIELDS)));
     },
     async editLine(transactionId, lineId, patch) {
       assertLive(transactionId);
+      assertNotFee(transactionId);
       if (!lineIdsByTransaction.get(transactionId)?.has(lineId)) {
         throw new Error(`Line ${lineId} does not belong to Transaction ${transactionId}`);
       }
@@ -690,6 +873,7 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
     },
     async updateTransaction(id, patch, updates) {
       assertLive(id);
+      assertNotFee(id);
       validateTransactionFields(patch);
       if (patch.accountId !== undefined) assertOpenForTransactions(patch.accountId);
       if (updates.length === 0) throw new Error("A Transaction needs at least one Line");
@@ -723,6 +907,7 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
     },
     async deleteTransaction(id) {
       assertLive(id);
+      assertNotFee(id);
       await commit(opsFor("transaction", id, { deletedAt: clock.now() }));
     },
     getTransaction: async (id) => readTransaction(id),
@@ -757,7 +942,7 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
       const merged = checkAccount({ ...current, ...fields });
       if (icon) assertAccountIcon(icon);
       if (color) assertAccountColor(color);
-      if (merged.currency !== current.currency && liveTransactionsOn(id).length > 0)
+      if (merged.currency !== current.currency && hasHistory(id))
         throw new Error("The currency cannot change once the Account has Transactions");
       await commit(
         opsFor("account", id, {
@@ -782,8 +967,7 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
     },
     async deleteAccount(id) {
       assertAccount(id);
-      if (liveTransactionsOn(id).length > 0)
-        throw new Error("An Account with history can only be archived");
+      if (hasHistory(id)) throw new Error("An Account with history can only be archived");
       await commit(opsFor("account", id, { deletedAt: clock.now() }));
     },
     async archiveAccount(id) {
@@ -932,6 +1116,48 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
     async untagTransaction(transactionId, tagId) {
       assertLive(transactionId);
       await setTagging(transactionId, tagId, 0);
+    },
+    async recordTransfer(input) {
+      checkTransfer(input);
+      const id = newUuidV7(clock, random);
+      await commit([
+        ...opsFor("transfer", id, {
+          ...pick(input, TRANSFER_FIELDS),
+          createdAt: clock.now(),
+        }),
+        ...feeOps(id, input, undefined),
+      ]);
+      return readTransfer(id);
+    },
+    async updateTransfer(id, patch) {
+      assertTransferLive(id);
+      const current = readTransfer(id);
+      const { fee, ...fields } = patch;
+      const next: NewTransfer = { ...current, ...fields };
+      if (fee === null) delete next.fee;
+      else if (fee !== undefined) next.fee = fee;
+      checkTransfer(next, current);
+      await commit([
+        ...opsFor("transfer", id, pick(fields, TRANSFER_FIELDS)),
+        ...feeOps(id, next, feeTransactionOf(id)),
+      ]);
+      return readTransfer(id);
+    },
+    async deleteTransfer(id) {
+      assertTransferLive(id);
+      const feeId = feeTransactionOf(id);
+      await commit([
+        ...opsFor("transfer", id, { deletedAt: clock.now() }),
+        ...(feeId !== undefined ? opsFor("transaction", feeId, { deletedAt: clock.now() }) : []),
+      ]);
+    },
+    getTransfer: async (id) => (isLiveTransfer(id) ? readTransfer(id) : undefined),
+    async listTransfers() {
+      return liveTransfers()
+        .map(readTransfer)
+        .sort((a, b) =>
+          a.date === b.date ? a.createdAt - b.createdAt || byId(a, b) : a.date < b.date ? -1 : 1,
+        );
     },
     async listTransactions() {
       const live = [...transactions.keys()].flatMap((id) => readTransaction(id) ?? []);

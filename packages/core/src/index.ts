@@ -16,6 +16,7 @@ export {
 export {
   BALANCE_ADJUSTMENT_CATEGORY,
   createEngine,
+  signedAmount,
   type Account,
   type AccountPatch,
   type Category,

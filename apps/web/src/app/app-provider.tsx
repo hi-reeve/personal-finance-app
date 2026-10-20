@@ -7,6 +7,7 @@ import {
   type NewAccount,
   type Settings,
   type Tag,
+  type Transaction,
 } from "@pfa/core";
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { openWebStore } from "../storage/web-store";
@@ -50,7 +51,8 @@ export interface AccountView extends Account {
 export interface Snapshot {
   settings: Settings;
   accounts: AccountView[];
-  transactions: number;
+  /** Live Transactions, newest first. */
+  activity: Transaction[];
   categories: Category[];
   /** How many Lines use each Category, by id. */
   categoryUse: Record<string, number>;
@@ -69,6 +71,11 @@ type CompleteSetup = (input: { baseCurrency: CurrencyCode; account: NewAccount }
 type Act = (change: (engine: Engine) => Promise<unknown>) => Promise<void>;
 
 const AppContext = createContext<AppState>({ status: "loading" });
+
+function newestFirst(a: Transaction, b: Transaction): number {
+  if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+  return a.createdAt !== b.createdAt ? b.createdAt - a.createdAt : b.id < a.id ? -1 : 1;
+}
 
 async function snapshot(engine: Engine): Promise<Snapshot> {
   const [list, transactions] = await Promise.all([
@@ -95,7 +102,7 @@ async function snapshot(engine: Engine): Promise<Snapshot> {
   return {
     settings: engine.getSettings(),
     accounts,
-    transactions: transactions.length,
+    activity: [...transactions].sort(newestFirst),
     categories,
     categoryUse,
     recentCategories,

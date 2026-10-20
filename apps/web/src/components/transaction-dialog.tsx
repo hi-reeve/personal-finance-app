@@ -30,6 +30,8 @@ interface LineDraft {
   itemName: string;
   /** Category picker shown on a split Line. */
   picking: boolean;
+  /** Move focus to the amount when the Line first appears. */
+  focus?: boolean;
 }
 
 function TransactionForm({
@@ -82,9 +84,14 @@ function TransactionForm({
   const split = lines.length > 1;
   const kindOf = (id: string | undefined) => app.categories.find((c) => c.id === id)?.kind;
   // A split Transaction is all spending or all income, so later Lines follow the first chosen kind.
-  const kind = split
-    ? lines.map((l) => kindOf(l.categoryId)).find((k) => k !== undefined)
-    : undefined;
+  // Other Lines decide the kind, so the only categorised Line can still switch.
+  const kindFor = (line: LineDraft) =>
+    split
+      ? lines
+          .filter((l) => l.key !== line.key)
+          .map((l) => kindOf(l.categoryId))
+          .find((k) => k !== undefined)
+      : undefined;
   const change = (key: number, patch: Partial<LineDraft>) =>
     setLines((all) => all.map((l) => (l.key === key ? { ...l, ...patch } : l)));
   const magnitudes = lines.map((l) => parseMoney(l.amount, currency, { numberFormat }));
@@ -157,7 +164,7 @@ function TransactionForm({
         recent={app.recentCategories}
         value={line.categoryId}
         onChange={(id) => change(line.key, { categoryId: id, picking: false })}
-        {...(kind !== undefined ? { kind } : {})}
+        {...(kindFor(line) !== undefined ? { kind: kindFor(line)! } : {})}
       />
     );
 
@@ -175,6 +182,7 @@ function TransactionForm({
               <input
                 className={FIELD}
                 inputMode="decimal"
+                autoFocus={line.focus === true}
                 value={line.amount}
                 onChange={(e) => change(line.key, { amount: e.target.value })}
               />
@@ -234,13 +242,15 @@ function TransactionForm({
         <button
           type="button"
           className={BUTTON}
-          onClick={() => setLines((all) => [...all, draft({ picking: true })])}
+          onClick={() => setLines((all) => [...all, draft({ picking: true, focus: true })])}
         >
           {split ? t.tx_add_line() : t.tx_split()}
         </button>
         {split && (
           <p className="ms-auto font-medium">
-            {t.tx_total()}: {total !== undefined ? money(total, currency) : "—"}
+            {t.tx_total({
+              amount: total !== undefined ? money(total, currency) : t.tx_total_unknown(),
+            })}
           </p>
         )}
       </div>

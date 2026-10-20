@@ -43,6 +43,26 @@ describe("a Transaction with several Lines", () => {
     expect(await engine.getBalance(account.id)).toBe(400_000);
   });
 
+  it("counts every Line under its own Category, and the total is always their sum", async () => {
+    const { engine, groceries, household, account } = await setup();
+    await engine.recordTransaction({
+      accountId: account.id,
+      date: "2026-10-19",
+      lines: [{ categoryId: groceries.id, amount: -5_000 }],
+    });
+
+    const perCategory = new Map<string, number>();
+    for (const tx of await engine.listTransactions()) {
+      expect(tx.total).toBe(tx.lines.reduce((sum, line) => sum + line.amount, 0));
+      for (const line of tx.lines)
+        perCategory.set(line.categoryId, (perCategory.get(line.categoryId) ?? 0) + line.amount);
+    }
+    expect(Object.fromEntries(perCategory)).toEqual({
+      [groceries.id]: -85_000,
+      [household.id]: -20_000,
+    });
+  });
+
   it("adds, removes and recategorises Lines in one write and the total follows", async () => {
     const { engine, account, groceries, household, tx } = await setup();
     const [rice, soap] = tx.lines;
@@ -84,6 +104,17 @@ describe("a Transaction with several Lines", () => {
         { id: "someone-elses", categoryId: groceries.id, amount: -1 },
       ]),
     ).rejects.toThrow(/belong/i);
+  });
+
+  it("rejects the same Line twice", async () => {
+    const { engine, tx } = await setup();
+    const line = tx.lines[0]!;
+    await expect(
+      engine.updateTransaction(tx.id, {}, [
+        { id: line.id, categoryId: line.categoryId, amount: -1 },
+        { id: line.id, categoryId: line.categoryId, amount: -2 },
+      ]),
+    ).rejects.toThrow(/more than once/i);
   });
 
   it("changes nothing when any part is invalid", async () => {

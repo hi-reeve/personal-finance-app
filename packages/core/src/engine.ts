@@ -696,6 +696,8 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
       const owned = [...(lineIdsByTransaction.get(id) ?? [])].filter(
         (lineId) => !lines.get(lineId)!.has("deletedAt"),
       );
+      const ids = updates.flatMap((update) => (update.id !== undefined ? [update.id] : []));
+      if (new Set(ids).size !== ids.length) throw new Error("A Line appears more than once");
       for (const update of updates) {
         assertAmount(update.amount);
         if (update.id !== undefined && !owned.includes(update.id))

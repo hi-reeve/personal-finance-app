@@ -372,9 +372,13 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
     for (const op of fresh) fold(op);
   }
 
+  /** A deleted Transaction has a positive `deletedAt`; zero means it was brought back. */
   function isLive(id: string): boolean {
     const fields = transactions.get(id);
-    return fields !== undefined && !fields.has("deletedAt");
+    if (fields === undefined || Number(fields.get("deletedAt")?.value ?? 0) > 0) return false;
+    // A Transfer's fee goes with its Transfer, even when another device deleted the Transfer.
+    const transferId = text(fields, "transferId");
+    return !transferId || isLiveTransfer(transferId);
   }
 
   function assertLive(id: string) {
@@ -701,11 +705,15 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
     return [...transfers.keys()].filter(isLiveTransfer);
   }
 
+  // The fee's ids come from its Transfer, so two devices that add a fee to the same Transfer write
+  // to the same records and merge into one fee instead of charging twice.
+  const feeIdOf = (transferId: string) => `fee-${transferId}`;
+  const feeLineIdOf = (transferId: string) => `fee-line-${transferId}`;
+
   /** The live Transaction that records a Transfer's fee, if it has one. */
   function feeTransactionOf(transferId: string): string | undefined {
-    return [...transactions.keys()].find(
-      (id) => isLive(id) && text(transactions.get(id)!, "transferId") === transferId,
-    );
+    const id = feeIdOf(transferId);
+    return isLive(id) ? id : undefined;
   }
 
   function readTransfer(id: string): Transfer {
@@ -750,7 +758,8 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
     );
   }
 
-  function checkTransfer(next: NewTransfer, previous?: Transfer) {
+  /** `checkFee` is off for an update that leaves the fee alone, so a later change to its Category cannot block it. */
+  function checkTransfer(next: NewTransfer, previous?: Transfer, checkFee = true) {
     assertDate(next.date);
     if (next.time !== undefined && next.time !== "") assertTime(next.time);
     if (next.fromAccountId === next.toAccountId)
@@ -768,7 +777,7 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
     const to = readAccount(next.toAccountId);
     if (from.currency === to.currency && next.fromAmount !== next.toAmount)
       throw new Error("Accounts in the same currency must send and receive the same amount");
-    if (next.fee !== undefined) {
+    if (checkFee && next.fee !== undefined) {
       assertAmount(next.fee.amount);
       if (next.fee.amount <= 0) throw new Error("A fee must be above zero");
       assertCategory(next.fee.categoryId);
@@ -777,36 +786,22 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
     }
   }
 
-  function feeOps(transferId: string, transfer: NewTransfer, existing: string | undefined): Op[] {
+  function feeOps(transferId: string, transfer: NewTransfer): Op[] {
+    const id = feeIdOf(transferId);
+    const lineId = feeLineIdOf(transferId);
     const fee = transfer.fee;
-    if (existing !== undefined) {
-      if (fee === undefined) return opsFor("transaction", existing, { deletedAt: clock.now() });
-      const lineId = [...(lineIdsByTransaction.get(existing) ?? [])].find(
-        (id) => !lines.get(id)!.has("deletedAt"),
-      )!;
+    if (fee === undefined)
+      return isLive(id) ? opsFor("transaction", id, { deletedAt: clock.now() }) : [];
+    const where = { accountId: transfer.fromAccountId, date: transfer.date };
+    const spending = { categoryId: fee.categoryId, amount: -fee.amount };
+    if (transactions.has(id))
       return [
-        ...opsFor("transaction", existing, {
-          accountId: transfer.fromAccountId,
-          date: transfer.date,
-        }),
-        ...opsFor("line", lineId, { categoryId: fee.categoryId, amount: -fee.amount }),
+        ...opsFor("transaction", id, { ...where, deletedAt: 0 }),
+        ...opsFor("line", lineId, spending),
       ];
-    }
-    if (fee === undefined) return [];
-    const id = newUuidV7(clock, random);
-    const lineId = newUuidV7(clock, random);
     return [
-      ...opsFor("transaction", id, {
-        accountId: transfer.fromAccountId,
-        date: transfer.date,
-        transferId,
-        createdAt: clock.now(),
-      }),
-      ...opsFor("line", lineId, {
-        transactionId: id,
-        categoryId: fee.categoryId,
-        amount: -fee.amount,
-      }),
+      ...opsFor("transaction", id, { ...where, transferId, createdAt: clock.now() }),
+      ...opsFor("line", lineId, { transactionId: id, ...spending }),
     ];
   }
 
@@ -1125,7 +1120,7 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
           ...pick(input, TRANSFER_FIELDS),
           createdAt: clock.now(),
         }),
-        ...feeOps(id, input, undefined),
+        ...feeOps(id, input),
       ]);
       return readTransfer(id);
     },
@@ -1136,11 +1131,8 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
       const next: NewTransfer = { ...current, ...fields };
       if (fee === null) delete next.fee;
       else if (fee !== undefined) next.fee = fee;
-      checkTransfer(next, current);
-      await commit([
-        ...opsFor("transfer", id, pick(fields, TRANSFER_FIELDS)),
-        ...feeOps(id, next, feeTransactionOf(id)),
-      ]);
+      checkTransfer(next, current, fee !== undefined);
+      await commit([...opsFor("transfer", id, pick(fields, TRANSFER_FIELDS)), ...feeOps(id, next)]);
       return readTransfer(id);
     },
     async deleteTransfer(id) {

@@ -8,19 +8,14 @@ import {
 import { Dialog } from "@ark-ui/react/dialog";
 import { Portal } from "@ark-ui/react/portal";
 import { Link } from "@tanstack/react-router";
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useApp, type ReadyState } from "../app/app-provider";
 import { today } from "../app/today";
 import { useCategoryLabel } from "./category-label";
 import { TransferForm } from "./transfer-form";
 import { CategoryPicker } from "./category-picker";
 import { useLocale } from "./locale";
-
-const FIELD =
-  "min-h-11 w-full rounded-lg border border-control bg-surface px-3 text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
-const BUTTON =
-  "min-h-11 rounded-lg border border-control px-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
-const FOCUS = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
+import { BUTTON, FIELD, FOCUS } from "./styles";
 
 /** Everything but a Balance adjustment can be edited; those are changed by adjusting again. */
 export function isEditable(transaction: Transaction): boolean {
@@ -323,6 +318,10 @@ export function TransactionDialog({
   const editing = transaction !== undefined || transfer !== undefined;
   // Adding starts as a Transaction; editing is fixed to what is being edited.
   const [chosen, setChosen] = useState<"transaction" | "transfer">("transaction");
+  // Each time the dialog opens it starts as a Transaction.
+  useEffect(() => {
+    if (open) setChosen("transaction");
+  }, [open]);
   const mode =
     transfer !== undefined ? "transfer" : transaction !== undefined ? "transaction" : chosen;
   const title = !editing

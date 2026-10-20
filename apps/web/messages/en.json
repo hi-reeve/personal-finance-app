@@ -197,5 +197,6 @@
   "activity_transfer_edit": "Edit transfer {label}",
   "activity_transfer_delete": "Delete transfer {label}",
   "activity_account_missing": "Deleted account",
-  "mode_label": "Entry type"
+  "mode_label": "Entry type",
+  "activity_transfer_amounts": "{sent} → {received}"
 }

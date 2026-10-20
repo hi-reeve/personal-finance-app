@@ -280,3 +280,71 @@ describe("Transfers on another device", () => {
     expect(await other.listTransfers()).toEqual(await engine.listTransfers());
   });
 });
+
+describe("Transfers merged from two devices", () => {
+  async function twoDevices() {
+    const { engine, rupiah, wallet, fees } = await setup();
+    const other = await createEngine({
+      deviceId: "dev-b",
+      clock: createManualClock(NOW),
+      random: createSeededRandom(9),
+      store: createMemoryStore(),
+    });
+    const transfer = await engine.recordTransfer({
+      ...base,
+      fromAccountId: rupiah.id,
+      toAccountId: wallet.id,
+      fromAmount: 100_000,
+      toAmount: 100_000,
+    });
+    await other.applyOps(await engine.exportOps());
+    return { engine, other, transfer, rupiah, fees };
+  }
+
+  it("charges one fee when both devices add a fee before they sync", async () => {
+    const { engine, other, transfer, rupiah, fees } = await twoDevices();
+    await engine.updateTransfer(transfer.id, { fee: { amount: 5_000, categoryId: fees.id } });
+    await other.updateTransfer(transfer.id, { fee: { amount: 5_000, categoryId: fees.id } });
+    await engine.applyOps(await other.exportOps());
+    await other.applyOps(await engine.exportOps());
+    expect(await engine.listTransactions()).toHaveLength(1);
+    expect(await engine.getBalance(rupiah.id)).toBe(5_000_000 - 100_000 - 5_000);
+    expect(await other.getBalance(rupiah.id)).toBe(await engine.getBalance(rupiah.id));
+  });
+
+  it("leaves no stray fee when one device deletes the Transfer as the other adds a fee", async () => {
+    const { engine, other, transfer, rupiah, fees } = await twoDevices();
+    await engine.deleteTransfer(transfer.id);
+    await other.updateTransfer(transfer.id, { fee: { amount: 5_000, categoryId: fees.id } });
+    await engine.applyOps(await other.exportOps());
+    await other.applyOps(await engine.exportOps());
+    for (const device of [engine, other]) {
+      expect(await device.listTransfers()).toEqual([]);
+      expect(await device.listTransactions()).toEqual([]);
+      expect(await device.getBalance(rupiah.id)).toBe(5_000_000);
+    }
+  });
+
+  it("brings a removed fee back when one is added again", async () => {
+    const { engine, transfer, rupiah, fees } = await twoDevices();
+    await engine.updateTransfer(transfer.id, { fee: { amount: 5_000, categoryId: fees.id } });
+    await engine.updateTransfer(transfer.id, { fee: null });
+    await engine.updateTransfer(transfer.id, { fee: { amount: 7_000, categoryId: fees.id } });
+    expect((await engine.getTransfer(transfer.id))!.fee).toEqual({
+      amount: 7_000,
+      categoryId: fees.id,
+    });
+    expect(await engine.getBalance(rupiah.id)).toBe(5_000_000 - 100_000 - 7_000);
+  });
+
+  it("still edits a Transfer after its fee Category was deleted elsewhere", async () => {
+    const { engine, transfer, fees } = await twoDevices();
+    await engine.updateTransfer(transfer.id, { fee: { amount: 5_000, categoryId: fees.id } });
+    // The Category stays used, so delete is refused; merge it away instead.
+    const other = await engine.createCategory({ name: "Charges", kind: "expense" });
+    await engine.mergeCategory(fees.id, other.id);
+    const updated = await engine.updateTransfer(transfer.id, { note: "hello" });
+    expect(updated.note).toBe("hello");
+    expect(updated.fee).toEqual({ amount: 5_000, categoryId: other.id });
+  });
+});

@@ -6,12 +6,10 @@ import { Amount } from "../components/amount";
 import { useCategoryLabel } from "../components/category-label";
 import { useLocale } from "../components/locale";
 import { Page } from "../components/page";
+import { BUTTON } from "../components/styles";
 import { TransactionDialog, isEditable } from "../components/transaction-dialog";
 
 export const Route = createFileRoute("/activity")({ component: Activity });
-
-const BUTTON =
-  "min-h-11 rounded-lg border border-control px-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
 
 function Activity() {
   const { t } = useLocale();
@@ -36,14 +34,27 @@ function List({ app }: { app: ReadyState }) {
   const entries = [
     ...app.activity
       .filter((tx) => tx.transferId === undefined)
-      .map((tx) => ({ kind: "transaction" as const, tx, date: tx.date, createdAt: tx.createdAt })),
+      .map((tx) => ({
+        kind: "transaction" as const,
+        tx,
+        date: tx.date,
+        createdAt: tx.createdAt,
+        id: tx.id,
+      })),
     ...app.transfers.map((transfer) => ({
       kind: "transfer" as const,
       transfer,
       date: transfer.date,
       createdAt: transfer.createdAt,
+      id: transfer.id,
     })),
-  ].sort((a, b) => (a.date !== b.date ? (a.date < b.date ? 1 : -1) : b.createdAt - a.createdAt));
+  ].sort((a, b) =>
+    a.date !== b.date
+      ? a.date < b.date
+        ? 1
+        : -1
+      : b.createdAt - a.createdAt || (a.id < b.id ? 1 : -1),
+  );
 
   async function remove(id: string, kind: "transaction" | "transfer") {
     setProblem(undefined);
@@ -239,7 +250,7 @@ function TransferRow({
         <Amount
           direction="neutral"
           variant="list"
-          formatted={sent === received ? sent : `${sent} → ${received}`}
+          formatted={sent === received ? sent : t.activity_transfer_amounts({ sent, received })}
         />
       </div>
       {asking ? (

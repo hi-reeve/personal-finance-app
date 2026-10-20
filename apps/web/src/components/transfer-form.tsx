@@ -4,10 +4,7 @@ import type { ReadyState } from "../app/app-provider";
 import { today } from "../app/today";
 import { CategoryPicker } from "./category-picker";
 import { useLocale } from "./locale";
-
-const FIELD =
-  "min-h-11 w-full rounded-lg border border-control bg-surface px-3 text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
-const FOCUS = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
+import { FIELD, FOCUS } from "./styles";
 
 /** Move money between two of the user's own Accounts, optionally with a fee. */
 export function TransferForm({

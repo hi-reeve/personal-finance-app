@@ -1,3 +1,4 @@
+export { type CategorySpend, type SpendingByCategory, type SpendingQuery } from "./reports";
 export {
   convertMinor,
   createRateProvider,

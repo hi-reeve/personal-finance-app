@@ -4,9 +4,14 @@ import { Amount } from "../components/amount";
 import { useMoneyText } from "../components/hide-amounts";
 import { useLocale } from "../components/locale";
 
+/** Named slices; anything past them is gathered as Other. */
 const SLICES = 5;
 /** Each slice is a lighter tint, and is also numbered, so no slice depends on its colour. */
 const TINTS = [1, 0.8, 0.62, 0.46, 0.32, 0.2];
+const tint = (index: number) => TINTS[Math.min(index, TINTS.length - 1)]!;
+/** The ring is drawn on a circle whose length is 100, starting at 12 o'clock, with a small gap. */
+const START = 25;
+const GAP = 0.4;
 
 interface Slice {
   key: string;
@@ -49,7 +54,10 @@ export function DonutChart({
         ]
       : named;
   const biggest = slices[0];
-  let offset = 0;
+  // Where each slice starts along the ring, worked out up front so rendering stays pure.
+  const starts = slices.map((_, index) =>
+    slices.slice(0, index).reduce((sum, slice) => sum + slice.share / 100, 0),
+  );
 
   return (
     <section aria-labelledby="donut-heading" className="flex flex-col gap-3">
@@ -72,8 +80,8 @@ export function DonutChart({
                 strokeWidth="7"
               />
               {slices.map((slice, index) => {
-                const length = slice.share / 100;
-                const circle = (
+                const drawn = Math.max(slice.share / 100 - GAP, 0);
+                return (
                   <circle
                     key={slice.key}
                     cx="21"
@@ -81,15 +89,13 @@ export function DonutChart({
                     r="15.9155"
                     fill="none"
                     stroke="currentColor"
-                    strokeOpacity={TINTS[index] ?? 0.2}
+                    strokeOpacity={tint(index)}
                     strokeWidth="7"
-                    strokeDasharray={`${Math.max(length - 0.4, 0)} ${100 - Math.max(length - 0.4, 0)}`}
-                    strokeDashoffset={25 - offset}
+                    strokeDasharray={`${drawn} ${100 - drawn}`}
+                    strokeDashoffset={START - starts[index]!}
                     pathLength={100}
                   />
                 );
-                offset += length;
-                return circle;
               })}
             </svg>
             <ol className="flex min-w-0 flex-1 flex-col gap-1.5">
@@ -99,7 +105,7 @@ export function DonutChart({
                     <span
                       aria-hidden="true"
                       className="size-3 shrink-0 rounded-full bg-expense"
-                      style={{ opacity: TINTS[index] ?? 0.2 }}
+                      style={{ opacity: tint(index) }}
                     />
                     <span className="truncate">
                       {index + 1}. {slice.name}

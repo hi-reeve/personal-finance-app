@@ -1,4 +1,4 @@
-import type { Category, Transaction } from "@pfa/core";
+import { BALANCE_ADJUSTMENT_CATEGORY, type Category, type Transaction } from "@pfa/core";
 import { Link } from "@tanstack/react-router";
 import type { ReadyState } from "../app/app-provider";
 import { Amount } from "../components/amount";
@@ -12,7 +12,15 @@ const COUNT = 5;
 export function RecentList({ app }: { app: ReadyState }) {
   const { t, money, date } = useLocale();
   const label = useCategoryLabel(app.categories as readonly Category[]);
-  const recent = app.activity.filter((tx) => tx.transferId === undefined).slice(0, COUNT);
+  // Not a Transfer's fee (it shows inside its Transfer) and not a balance adjustment: neither is
+  // spending or income, and reports leave them out.
+  const recent = app.activity
+    .filter(
+      (tx) =>
+        tx.transferId === undefined &&
+        tx.lines.every((line) => line.categoryId !== BALANCE_ADJUSTMENT_CATEGORY),
+    )
+    .slice(0, COUNT);
   const currencyOf = (tx: Transaction) =>
     app.accounts.find((a) => a.id === tx.accountId)?.currency ?? app.settings.baseCurrency ?? "USD";
 

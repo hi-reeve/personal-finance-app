@@ -29,7 +29,7 @@ export type SummaryState =
   | { status: "ready"; data: SummaryData };
 
 /**
- * Everything the Summary view shows, asked of the report engine for one month. Asks again when the
+ * Everything the Home views show, asked of the report engine for one month. Asks again when the
  * month changes or the data does, so a number on screen is never older than the data.
  */
 export function useSummary(app: ReadyState, period: Period): SummaryState {

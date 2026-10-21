@@ -101,8 +101,14 @@ export function MonthlyBars({
         })}
       </svg>
       <p className="flex flex-wrap gap-x-4 text-sm text-ink-muted">
-        <span>◧ {t.monthly_income()}</span>
-        <span>◨ {t.monthly_spending()}</span>
+        <span className="flex items-center gap-1.5">
+          <span aria-hidden="true" className="inline-block size-3 rounded-sm bg-income" />
+          {t.monthly_income()}
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span aria-hidden="true" className="inline-block size-3 rounded-sm bg-expense" />
+          {t.monthly_spending()}
+        </span>
       </p>
       <p className="text-sm text-ink-muted" aria-hidden="true">
         {summary}

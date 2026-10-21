@@ -118,7 +118,7 @@ describe("MonthlyBars", () => {
     const first = document.querySelector("svg rect.fill-income")!;
     const second = document.querySelector("svg rect.fill-expense")!;
     expect(Number(first.getAttribute("x"))).toBeLessThan(Number(second.getAttribute("x")));
-    expect(screen.getByText(/Income/, { selector: "span" })).toBeTruthy();
+    expect(screen.getAllByText("Income").length).toBeGreaterThan(0);
   });
 
   it("describes the six months in words and in a table", () => {

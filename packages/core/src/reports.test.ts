@@ -374,3 +374,52 @@ describe("daily totals", () => {
     expect(empty.days).toEqual([]);
   });
 });
+
+describe("monthly totals", () => {
+  it("gives income and spending for every month in the range, empty months included", async () => {
+    const { engine } = await october();
+    const report = await engine.monthlyTotals({ from: "2026-08-01", to: "2026-10-31" });
+    expect(report.currency).toBe("IDR");
+    expect(report.months).toEqual([
+      { month: "2026-08", from: "2026-08-01", to: "2026-08-31", income: 0, expense: 0 },
+      { month: "2026-09", from: "2026-09-01", to: "2026-09-30", income: 0, expense: 999_999 },
+      {
+        month: "2026-10",
+        from: "2026-10-01",
+        to: "2026-10-31",
+        income: 10_000_000,
+        expense: 305_000,
+      },
+    ]);
+  });
+
+  it("always agrees with the by-Category report for the same month", async () => {
+    const { engine } = await october();
+    const [september, october_] = (
+      await engine.monthlyTotals({ from: "2026-09-01", to: "2026-10-31" })
+    ).months;
+    for (const month of [september!, october_!]) {
+      const range = { from: month.from, to: month.to };
+      expect(month.expense).toBe((await engine.spendingByCategory(range)).total);
+      expect(month.income).toBe(
+        (await engine.spendingByCategory({ ...range, kind: "income" })).total,
+      );
+    }
+  });
+
+  it("starts the first month from the day asked for, but still reports whole months", async () => {
+    const { engine } = await october();
+    const report = await engine.monthlyTotals({ from: "2026-10-20", to: "2026-10-31" });
+    expect(report.months).toHaveLength(1);
+    expect(report.months[0]).toMatchObject({ from: "2026-10-01", to: "2026-10-31" });
+    // Only what falls inside the range counts: 20 Oct onwards has just the salary.
+    expect(report.months[0]).toMatchObject({ income: 10_000_000, expense: 0 });
+  });
+
+  it("is empty before setup", async () => {
+    const { engine } = await device();
+    expect((await engine.monthlyTotals({ from: "2026-08-01", to: "2026-10-31" })).months).toEqual(
+      [],
+    );
+  });
+});

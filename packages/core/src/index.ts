@@ -2,6 +2,8 @@ export { daysIn, monthOf, shiftMonth, type Period } from "./periods";
 export {
   type CategorySpend,
   type DailyTotals,
+  type MonthlyTotal,
+  type MonthlyTotals,
   type SpendingByCategory,
   type SpendingQuery,
 } from "./reports";
@@ -74,6 +76,7 @@ export {
   formatDate,
   formatDay,
   formatMonth,
+  formatMonthShort,
   formatMoney,
   parseMoney,
   type CurrencyCode,

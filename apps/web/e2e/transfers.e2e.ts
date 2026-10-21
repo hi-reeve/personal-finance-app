@@ -85,6 +85,9 @@ test("a Transfer moves money, takes a fee, crosses currencies, and is not spendi
   await page.goto("/activity");
   await page.getByRole("button", { name: "Edit transfer Savings → Wallet" }).click();
   const edit = page.getByRole("dialog", { name: "Edit transfer" });
+  // The dialog moves focus to its first field a moment after opening; typing before that lands
+  // nowhere. Wait for it to settle.
+  await expect(edit.getByLabel("From account")).toBeFocused();
   await edit.getByLabel("Fee (optional)").fill("");
   // The category picker collapses; wait for the layout to settle before pressing Save.
   await expect(edit.getByRole("group", { name: "Fee category" })).toHaveCount(0);

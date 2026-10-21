@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import { daysIn, formatDay, formatMonth, monthOf, shiftMonth } from "./index";
+import { daysIn, formatDay, formatMonth, formatMonthShort, monthOf, shiftMonth } from "./index";
 
 describe("monthOf", () => {
   it("is the whole calendar month around a date", () => {
@@ -53,5 +53,13 @@ describe("month and day labels", () => {
   it("write a day without the year", () => {
     expect(formatDay("2026-10-18", "en")).toBe("18 Oct");
     expect(formatDay("2026-08-17", "id")).toBe("17 Agt");
+  });
+});
+
+describe("short month names", () => {
+  it("are three letters in the language", () => {
+    expect(formatMonthShort("2026-10-18", "en")).toBe("Oct");
+    expect(formatMonthShort("2026-08-17", "id")).toBe("Agt");
+    expect(formatMonthShort("2026-10-18", "id")).toBe("Okt");
   });
 });

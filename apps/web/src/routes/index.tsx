@@ -7,6 +7,7 @@ import { HideAmountsToggle } from "../components/hide-amounts";
 import { useLocale } from "../components/locale";
 import { Page } from "../components/page";
 import { CategoryTree } from "../dashboard/category-tree";
+import { OverviewView } from "../dashboard/overview-view";
 import { Hero, SkippedNote } from "../dashboard/summary-view";
 import { ViewSwitcher, useHomeView } from "../dashboard/view-switcher";
 import { PeriodSelector } from "../dashboard/period-selector";
@@ -38,6 +39,8 @@ function Dashboard({ app }: { app: ReadyState }) {
           <Hero data={summary.data} />
           {view === "summary" ? (
             <SummaryView data={summary.data} />
+          ) : view === "overview" ? (
+            <OverviewView data={summary.data} app={app} />
           ) : (
             <CategoryTree
               key={summary.data.period.from}

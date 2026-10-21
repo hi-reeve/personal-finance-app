@@ -1,6 +1,6 @@
 import type { Category, CategoryKind, Transaction } from "./engine";
 import type { CurrencyCode } from "./format";
-import { daysIn } from "./periods";
+import { daysIn, monthOf, shiftMonth } from "./periods";
 import { convertMinor } from "./rates";
 
 export interface SpendingQuery {
@@ -275,4 +275,58 @@ export function dailyTotals(input: SpendingInput): DailyTotals {
     days,
     skipped: { lines: counted.skipped },
   };
+}
+
+export interface MonthlyTotal {
+  /** `YYYY-MM`. */
+  month: string;
+  /** The whole calendar month, even when the range only covers part of it. */
+  from: string;
+  to: string;
+  /** Base-currency minor units; both are positive amounts. */
+  income: number;
+  expense: number;
+}
+
+export interface MonthlyTotals {
+  currency?: CurrencyCode;
+  from: string;
+  to: string;
+  /** Every month the range touches, oldest first. Empty before setup. */
+  months: MonthlyTotal[];
+  skipped: { lines: number };
+}
+
+/** Income and spending for each month in the range, under the same counting rules as every report. */
+export function monthlyTotals(input: Omit<SpendingInput, "kind">): MonthlyTotals {
+  const { base, from, to } = input;
+  if (!ISO_DATE.test(from) || !ISO_DATE.test(to) || from > to)
+    throw new Error(`Invalid period ${from} to ${to}: expected YYYY-MM-DD dates, earliest first`);
+  const result: MonthlyTotals = {
+    ...(base !== undefined ? { currency: base } : {}),
+    from,
+    to,
+    months: [],
+    skipped: { lines: 0 },
+  };
+  if (base === undefined) return result;
+
+  const known = new Map(input.categories.map((c) => [c.id, c]));
+  const totals = new Map<string, { income: number; expense: number }>();
+  for (const kind of ["income", "expense"] as const) {
+    const counted = countLines({ ...input, kind }, kind, base, known);
+    // Each Line is looked at under its own kind only, so none is counted twice.
+    result.skipped.lines += counted.skipped;
+    for (const line of counted.lines) {
+      const key = line.date.slice(0, 7);
+      const month = totals.get(key) ?? { income: 0, expense: 0 };
+      month[kind] += line.value;
+      totals.set(key, month);
+    }
+  }
+  for (let month = monthOf(from); month.from <= to; month = shiftMonth(month, 1)) {
+    const key = month.from.slice(0, 7);
+    result.months.push({ month: key, ...month, ...(totals.get(key) ?? { income: 0, expense: 0 }) });
+  }
+  return result;
 }

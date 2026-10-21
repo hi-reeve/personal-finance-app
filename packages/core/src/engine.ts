@@ -12,8 +12,10 @@ import {
 import { convertMinor, normalizeRate } from "./rates";
 import {
   dailyTotals,
+  monthlyTotals,
   spendingByCategory,
   type DailyTotals,
+  type MonthlyTotals,
   type SpendingInput,
   type SpendingByCategory,
   type SpendingQuery,
@@ -331,6 +333,8 @@ export interface Engine {
   spendingByCategory(query: SpendingQuery): Promise<SpendingByCategory>;
   /** The same counting rules, day by day over the period. */
   dailyTotals(query: SpendingQuery): Promise<DailyTotals>;
+  /** Income and spending per calendar month across a range, for trends. */
+  monthlyTotals(query: { from: string; to: string }): Promise<MonthlyTotals>;
   /** Live Transactions, oldest date first. A Transfer's fee is included; the Transfer is not. */
   listTransactions(): Promise<Transaction[]>;
   /** Every op this device holds, to send to another device. */
@@ -1357,6 +1361,7 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
     },
     spendingByCategory: async (query) => spendingByCategory(reportInput(query)),
     dailyTotals: async (query) => dailyTotals(reportInput(query)),
+    monthlyTotals: async (query) => monthlyTotals(reportInput(query)),
     async listTransactions() {
       const live = [...transactions.keys()].flatMap((id) => readTransaction(id) ?? []);
       return live.sort((a, b) => (a.date === b.date ? byId(a, b) : a.date < b.date ? -1 : 1));

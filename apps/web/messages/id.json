@@ -293,5 +293,19 @@
   "tree_collapse": "Sembunyikan isi {name}",
   "tree_own": "Dicatat langsung di {name}",
   "tree_summary": "Yang terbesar dari {count} adalah {name} sebesar {share}% ({amount}). Buka kategori untuk melihat isinya.",
-  "tree_none": "Belum ada pengeluaran untuk dirinci."
+  "tree_none": "Belum ada pengeluaran untuk dirinci.",
+  "view_overview": "Gambaran",
+  "overview_donut": "Ke mana perginya",
+  "donut_other": "Lainnya",
+  "donut_summary": "{count} bagian. Yang terbesar adalah {name} sebesar {share}% ({amount}).",
+  "donut_none": "Belum ada pengeluaran untuk ditampilkan.",
+  "monthly_heading": "Pemasukan dan pengeluaran per bulan",
+  "monthly_income": "Pemasukan",
+  "monthly_spending": "Pengeluaran",
+  "monthly_summary": "Selama {months} bulan Anda memperoleh {income} dan membelanjakan {spent}. Bulan pengeluaran terbesar adalah {month} ({amount}).",
+  "monthly_summary_none": "Tidak ada pemasukan atau pengeluaran di bulan-bulan ini.",
+  "chart_month": "Bulan",
+  "recent_heading": "Transaksi terbaru",
+  "recent_none": "Belum ada transaksi.",
+  "recent_all": "Lihat semua aktivitas"
 }

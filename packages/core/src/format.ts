@@ -142,3 +142,11 @@ export function formatDay(date: string, language: Language): string {
     locale: DATE_LOCALES[language],
   });
 }
+
+/** A date's month as a short name for axes: "Oct" / "Agt". */
+export function formatMonthShort(date: string, language: Language): string {
+  assertDate(date);
+  return format(parse(date, "yyyy-MM-dd", new Date(0)), "MMM", {
+    locale: DATE_LOCALES[language],
+  });
+}

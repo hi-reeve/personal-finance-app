@@ -36,7 +36,7 @@ export function Hero({ data }: { data: SummaryData }) {
   );
 }
 
-function Cards({ data }: { data: SummaryData }) {
+export function Cards({ data }: { data: SummaryData }) {
   const { t, money } = useLocale();
   const net = data.income - data.spending.total;
   const card = "flex flex-col gap-1 rounded-xl border border-line bg-surface p-4";

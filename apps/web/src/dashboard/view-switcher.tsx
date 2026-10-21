@@ -2,18 +2,31 @@ import { useCallback, useState } from "react";
 import { Choice } from "../components/appearance";
 import { useLocale } from "../components/locale";
 
-export const HOME_VIEWS = ["summary", "categories"] as const;
+export const HOME_VIEWS = ["summary", "overview", "categories"] as const;
 export type HomeView = (typeof HOME_VIEWS)[number];
 
 const KEY = "pfa.homeView";
 
-function readView(): HomeView {
+/** From a tablet up there is room for the dense Overview; a phone starts on the Summary. */
+const WIDE = "(min-width: 768px)";
+
+function usualView(): HomeView {
   try {
-    const stored = localStorage.getItem(KEY);
-    return HOME_VIEWS.includes(stored as HomeView) ? (stored as HomeView) : "summary";
+    return window.matchMedia(WIDE).matches ? "overview" : "summary";
   } catch {
     return "summary";
   }
+}
+
+/** The view chosen on this device if there is one, else the usual one for this screen. */
+function readView(): HomeView {
+  try {
+    const stored = localStorage.getItem(KEY);
+    if (HOME_VIEWS.includes(stored as HomeView)) return stored as HomeView;
+  } catch {
+    // Fall through to the usual view.
+  }
+  return usualView();
 }
 
 /** Which Home view is showing. A device-local choice, remembered on this device. */
@@ -40,6 +53,7 @@ export function ViewSwitcher({
   const { t } = useLocale();
   const labels: Record<HomeView, string> = {
     summary: t.view_summary(),
+    overview: t.view_overview(),
     categories: t.view_categories(),
   };
   return (

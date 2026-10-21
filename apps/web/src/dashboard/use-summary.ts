@@ -2,6 +2,7 @@ import {
   shiftMonth,
   type CurrencyCode,
   type DailyTotals,
+  type MonthlyTotals,
   type Period,
   type SpendingByCategory,
 } from "@pfa/core";
@@ -18,6 +19,8 @@ export interface SummaryData {
   income: number;
   /** Spending for the month before, to compare with. */
   previousSpending: number;
+  /** The six months ending with this one. */
+  monthly: MonthlyTotals;
 }
 
 export type SummaryState =
@@ -39,11 +42,12 @@ export function useSummary(app: ReadyState, period: Period): SummaryState {
     let live = true;
     const previous = shiftMonth(period, -1);
     read(async (engine) => {
-      const [spending, daily, income, before] = await Promise.all([
+      const [spending, daily, income, before, monthly] = await Promise.all([
         engine.spendingByCategory(period),
         engine.dailyTotals(period),
         engine.spendingByCategory({ ...period, kind: "income" }),
         engine.spendingByCategory(previous),
+        engine.monthlyTotals({ from: shiftMonth(period, -5).from, to: period.to }),
       ]);
       return {
         currency: base,
@@ -53,6 +57,7 @@ export function useSummary(app: ReadyState, period: Period): SummaryState {
         daily,
         income: income.total,
         previousSpending: before.total,
+        monthly,
       } satisfies SummaryData;
     }).then(
       (data) => live && setState({ status: "ready", data }),

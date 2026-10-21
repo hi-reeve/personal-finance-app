@@ -34,6 +34,7 @@ test("Home answers where the money went, and every number has a text and a table
   await addTransaction(page, "300", "Food", "Feast", lastMonthDay);
 
   await page.goto("/");
+  await page.getByLabel("Summary", { exact: true }).check({ force: true });
   const main = page.getByRole("main");
 
   // The headline compares with the month before: 150 against 300.
@@ -93,6 +94,7 @@ test("the Categories view opens a Category into what is inside it, with the same
   await addTransaction(page, "50", "Fuel", "Shell");
 
   await page.goto("/");
+  await page.getByLabel("Summary", { exact: true }).check({ force: true });
   const main = page.getByRole("main");
   await expect(main).toContainText("you spent $150.00");
   const summaryTop = await page
@@ -124,4 +126,79 @@ test("the Categories view opens a Category into what is inside it, with the same
   await page.reload();
   await expect(page.getByRole("region", { name: "Spending by category" })).toBeVisible();
   await expect(page.getByLabel("Categories", { exact: true })).toBeChecked();
+});
+
+test("Overview shows the same numbers, and the first view depends on the screen then sticks", async ({
+  page,
+}) => {
+  await openApp(page, "/categories");
+  await page.goto("/categories");
+  await addCategory(page, "Food");
+  await addCategory(page, "Fuel");
+  await addCategory(page, "Salary", "Income");
+  await page.goto("/activity");
+  await addTransaction(page, "100", "Food", "Warung");
+  await addTransaction(page, "50", "Fuel", "Shell");
+  await addTransaction(page, "1000", "Salary", "Acme");
+
+  // A wide screen starts on the Overview; a phone starts on the Summary.
+  await page.goto("/");
+  await expect(page.getByLabel("Overview", { exact: true })).toBeChecked();
+  const main = page.getByRole("main");
+  await expect(page.getByRole("region", { name: "Where it went" })).toBeVisible();
+
+  // The strip, the ring and the six-month bars all read the same report.
+  const cards = main.locator(".grid").first();
+  await expect(cards).toContainText("$1,000.00");
+  await expect(cards).toContainText("$150.00");
+  await expect(cards).toContainText("$850.00");
+  const donut = page.getByRole("region", { name: "Where it went" });
+  await expect(donut).toContainText("1. Food");
+  await expect(donut).toContainText("66.7%");
+  await expect(donut).toContainText("$100.00");
+  const monthly = page.getByRole("region", { name: "Income and spending by month" });
+  await monthly.getByText("Show as table").click();
+  const thisMonth = monthly.getByRole("table").getByRole("row").last();
+  await expect(thisMonth).toContainText("$1,000.00");
+  await expect(thisMonth).toContainText("$150.00");
+
+  // Recent Transactions, newest first, with a way on to all of them.
+  const recent = page.getByRole("region", { name: "Recent transactions" });
+  await expect(recent.getByRole("listitem")).toHaveCount(3);
+  await expect(recent.getByRole("listitem").first()).toContainText("Acme");
+  await expect(recent.getByRole("link", { name: "See all activity" })).toBeVisible();
+
+  // The same figures in the Summary view.
+  await page.getByLabel("Summary", { exact: true }).check({ force: true });
+  await expect(main).toContainText("you spent $150.00");
+  await expect(page.getByRole("region", { name: "Top categories" })).toContainText("66.7%");
+
+  // The choice sticks on this device, whatever the screen.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.reload();
+  await expect(page.getByLabel("Summary", { exact: true })).toBeChecked();
+});
+
+test("a phone starts on the Summary and stacks the Overview in one column", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openApp(page, "/");
+  await page.goto("/");
+  await expect(page.getByLabel("Summary", { exact: true })).toBeChecked();
+
+  await page.getByLabel("Overview", { exact: true }).check({ force: true });
+  const donut = page.getByRole("region", { name: "Where it went" });
+  const monthly = page.getByRole("region", { name: "Income and spending by month" });
+  const a = (await donut.boundingBox())!;
+  const b = (await monthly.boundingBox())!;
+  // Stacked: the second sits below the first, not beside it.
+  expect(b.y).toBeGreaterThan(a.y + a.height - 1);
+  expect(Math.abs(a.x - b.x)).toBeLessThan(2);
+
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const wide = {
+    donut: (await donut.boundingBox())!,
+    monthly: (await monthly.boundingBox())!,
+  };
+  // Side by side on a wide screen.
+  expect(wide.monthly.x).toBeGreaterThan(wide.donut.x + wide.donut.width - 1);
 });

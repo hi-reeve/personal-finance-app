@@ -32,7 +32,13 @@ export async function addCategory(
 }
 
 /** Opens Add and records a single-Line Transaction. */
-export async function addTransaction(page: Page, amount: string, category: string, payee?: string) {
+export async function addTransaction(
+  page: Page,
+  amount: string,
+  category: string,
+  payee?: string,
+  date?: string,
+) {
   await page.getByRole("button", { name: "Add transaction" }).and(page.locator(":visible")).click();
   const dialog = page.getByRole("dialog");
   await dialog.getByLabel("Amount").fill(amount);
@@ -40,6 +46,7 @@ export async function addTransaction(page: Page, amount: string, category: strin
   // Options read as a path, for example "Food › Groceries".
   await dialog.getByRole("button", { name: new RegExp(`(^| › )${category}$`) }).click();
   if (payee) await dialog.getByLabel("Payee").fill(payee);
+  if (date) await dialog.getByLabel("Date").fill(date);
   await dialog.getByRole("button", { name: "Add", exact: true }).click();
   await expect(dialog).toHaveCount(0);
 }

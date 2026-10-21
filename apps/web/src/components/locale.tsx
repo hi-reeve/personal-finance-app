@@ -1,5 +1,7 @@
 import {
   formatDate,
+  formatDay,
+  formatMonth,
   formatMoney,
   type CurrencyCode,
   type Language,
@@ -38,6 +40,10 @@ interface LocaleState {
   t: typeof m;
   money: (amount: number, currency: CurrencyCode) => string;
   date: (isoDate: string) => string;
+  /** "October 2026" */
+  month: (isoDate: string) => string;
+  /** "18 Oct" */
+  day: (isoDate: string) => string;
 }
 
 const LocaleContext = createContext<LocaleState | null>(null);
@@ -75,6 +81,8 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
       t: m,
       money: (amount, currency) => formatMoney(amount, currency, { numberFormat }),
       date: (isoDate) => formatDate(isoDate, language),
+      month: (isoDate) => formatMonth(isoDate, language),
+      day: (isoDate) => formatDay(isoDate, language),
     }),
     [language, numberFormat],
   );

@@ -320,3 +320,49 @@ describe("odd data", () => {
     expect(await other.spendingByCategory(period)).toEqual(await engine.spendingByCategory(period));
   });
 });
+
+describe("daily totals", () => {
+  it("gives every day of the period, with the days nothing happened at zero", async () => {
+    const { engine } = await october();
+    const report = await engine.dailyTotals(period);
+    expect(report).toMatchObject({ currency: "IDR", kind: "expense", ...period });
+    expect(report.days).toHaveLength(31);
+    expect(report.days[0]).toEqual({ date: "2026-10-01", total: 0 });
+    const byDate = Object.fromEntries(report.days.map((d) => [d.date, d.total]));
+    expect(byDate["2026-10-05"]).toBe(100_000); // a split receipt: both Lines
+    expect(byDate["2026-10-06"]).toBe(50_000);
+    expect(byDate["2026-10-07"]).toBe(160_000); // $10.00 at its frozen 16,000
+    expect(byDate["2026-10-08"]).toBe(-10_000); // a refund day
+    expect(byDate["2026-10-09"]).toBe(5_000); // the Transfer's fee, not the Transfer
+    expect(byDate["2026-10-10"]).toBe(0); // the balance adjustment is left out
+  });
+
+  it("always agrees with the by-Category report", async () => {
+    const { engine } = await october();
+    for (const kind of ["expense", "income"] as const) {
+      const daily = await engine.dailyTotals({ ...period, kind });
+      const byCategory = await engine.spendingByCategory({ ...period, kind });
+      expect(daily.total).toBe(byCategory.total);
+      expect(daily.days.reduce((sum, d) => sum + d.total, 0)).toBe(byCategory.total);
+    }
+  });
+
+  it("reports income, narrows to a sub-period, and counts what it cannot convert", async () => {
+    const { engine } = await october();
+    const income = await engine.dailyTotals({ ...period, kind: "income" });
+    expect(income.days.find((d) => d.total !== 0)).toEqual({
+      date: "2026-10-25",
+      total: 10_000_000,
+    });
+    const week = await engine.dailyTotals({ from: "2026-10-05", to: "2026-10-07" });
+    expect(week.days.map((d) => d.date)).toEqual(["2026-10-05", "2026-10-06", "2026-10-07"]);
+    expect(week.skipped).toEqual({ lines: 0 });
+  });
+
+  it("is zero everywhere, not broken, before anything is recorded", async () => {
+    const { engine } = await device();
+    const empty = await engine.dailyTotals({ from: "2026-10-01", to: "2026-10-03" });
+    expect(empty.total).toBe(0);
+    expect(empty.days).toEqual([]);
+  });
+});

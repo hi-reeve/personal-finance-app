@@ -1,5 +1,6 @@
 import type { Category, CategoryKind, Transaction } from "./engine";
 import type { CurrencyCode } from "./format";
+import { daysIn } from "./periods";
 import { convertMinor } from "./rates";
 
 export interface SpendingQuery {
@@ -81,6 +82,56 @@ function push<K, V>(map: Map<K, V[]>, key: K, value: V) {
   else map.set(key, [value]);
 }
 
+/** One Line that counts, in the base currency, positive when it adds to the report's kind. */
+interface CountedLine {
+  date: string;
+  categoryId: string;
+  value: number;
+}
+
+/**
+ * The counting rules shared by every report: which Lines count, and what each is worth in the base
+ * currency at its Transaction's frozen rate. A Line that cannot be converted is counted, not summed.
+ */
+function countLines(
+  input: SpendingInput,
+  kind: CategoryKind,
+  base: CurrencyCode,
+  known: ReadonlyMap<string, Category>,
+): { lines: CountedLine[]; skipped: number } {
+  const lines: CountedLine[] = [];
+  let skipped = 0;
+  for (const tx of input.transactions) {
+    if (tx.date < input.from || tx.date > input.to) continue;
+    const currency = input.accountCurrency.get(tx.accountId);
+    for (const line of tx.lines) {
+      if (input.excluded.has(line.categoryId)) continue;
+      // A Line whose Category is gone counts by the way the money moved.
+      const lineKind = known.get(line.categoryId)?.kind ?? (line.amount < 0 ? "expense" : "income");
+      if (lineKind !== kind) continue;
+      let amount: number | undefined;
+      if (currency === base) amount = line.amount;
+      else if (currency !== undefined && tx.rate !== undefined) {
+        try {
+          amount = convertMinor(line.amount, tx.rate, currency, base);
+        } catch {
+          // A rate or amount that cannot be converted is counted, not allowed to sink the report.
+        }
+      }
+      if (amount === undefined) {
+        skipped += 1;
+        continue;
+      }
+      lines.push({
+        date: tx.date,
+        categoryId: line.categoryId,
+        value: kind === "expense" ? -amount : amount,
+      });
+    }
+  }
+  return { lines, skipped };
+}
+
 /**
  * The counting rules in one place, "as recorded": every Line counts under its own Category at the
  * rate frozen with its Transaction, so a past period never moves. Only income and expense Lines
@@ -104,34 +155,11 @@ export function spendingByCategory(input: SpendingInput): SpendingByCategory {
   if (base === undefined) return result;
 
   const known = new Map(input.categories.map((c) => [c.id, c]));
+  const counted = countLines(input, kind, base, known);
+  result.skipped.lines = counted.skipped;
   const figures = new Map<string, number>();
-  for (const tx of input.transactions) {
-    if (tx.date < from || tx.date > to) continue;
-    const currency = input.accountCurrency.get(tx.accountId);
-    for (const line of tx.lines) {
-      if (input.excluded.has(line.categoryId)) continue;
-      // A Line whose Category is gone counts by the way the money moved.
-      const lineKind = known.get(line.categoryId)?.kind ?? (line.amount < 0 ? "expense" : "income");
-      if (lineKind !== kind) continue;
-      let amount: number | undefined;
-      if (currency === base) amount = line.amount;
-      else if (currency !== undefined && tx.rate !== undefined) {
-        try {
-          amount = convertMinor(line.amount, tx.rate, currency, base);
-        } catch {
-          // A rate or amount that cannot be converted is counted, not allowed to sink the report.
-        }
-      }
-      if (amount === undefined) {
-        result.skipped.lines += 1;
-        continue;
-      }
-      figures.set(
-        line.categoryId,
-        (figures.get(line.categoryId) ?? 0) + (kind === "expense" ? -amount : amount),
-      );
-    }
-  }
+  for (const line of counted.lines)
+    figures.set(line.categoryId, (figures.get(line.categoryId) ?? 0) + line.value);
 
   const childrenOf = new Map<string | undefined, string[]>();
   for (const id of figures.keys()) if (!known.has(id)) push(childrenOf, undefined, id);
@@ -203,4 +231,44 @@ export function spendingByCategory(input: SpendingInput): SpendingByCategory {
   result.total = tops.reduce((sum, node) => sum + node.total, 0);
   result.categories = tops;
   return result;
+}
+
+export interface DailyTotals {
+  currency?: CurrencyCode;
+  kind: CategoryKind;
+  from: string;
+  to: string;
+  total: number;
+  /** Every day of the period in order; a day with nothing is zero. Empty before setup. */
+  days: { date: string; total: number }[];
+  skipped: { lines: number };
+}
+
+/** What was spent (or earned) each day, under the same counting rules as the by-Category report. */
+export function dailyTotals(input: SpendingInput): DailyTotals {
+  const kind = input.kind ?? "expense";
+  const { base, from, to } = input;
+  const dates = daysIn({ from, to });
+  const empty: DailyTotals = {
+    ...(base !== undefined ? { currency: base } : {}),
+    kind,
+    from,
+    to,
+    total: 0,
+    days: [],
+    skipped: { lines: 0 },
+  };
+  if (base === undefined) return empty;
+  const known = new Map(input.categories.map((c) => [c.id, c]));
+  const counted = countLines(input, kind, base, known);
+  const perDay = new Map<string, number>();
+  for (const line of counted.lines)
+    perDay.set(line.date, (perDay.get(line.date) ?? 0) + line.value);
+  const days = dates.map((date) => ({ date, total: perDay.get(date) ?? 0 }));
+  return {
+    ...empty,
+    total: days.reduce((sum, day) => sum + day.total, 0),
+    days,
+    skipped: { lines: counted.skipped },
+  };
 }

@@ -108,3 +108,19 @@ export function formatDate(date: string, language: Language): string {
     locale: DATE_LOCALES[language],
   });
 }
+
+/** A date's month written in full: "October 2026" / "Oktober 2026". */
+export function formatMonth(date: string, language: Language): string {
+  assertDate(date);
+  return format(parse(date, "yyyy-MM-dd", new Date(0)), "MMMM yyyy", {
+    locale: DATE_LOCALES[language],
+  });
+}
+
+/** A date without its year, for axes and tables: "18 Oct" / "17 Agt". */
+export function formatDay(date: string, language: Language): string {
+  assertDate(date);
+  return format(parse(date, "yyyy-MM-dd", new Date(0)), "d MMM", {
+    locale: DATE_LOCALES[language],
+  });
+}

@@ -1,4 +1,10 @@
-export { type CategorySpend, type SpendingByCategory, type SpendingQuery } from "./reports";
+export { daysIn, monthOf, shiftMonth, type Period } from "./periods";
+export {
+  type CategorySpend,
+  type DailyTotals,
+  type SpendingByCategory,
+  type SpendingQuery,
+} from "./reports";
 export {
   convertMinor,
   createRateProvider,
@@ -64,6 +70,8 @@ export {
   currencyCodes,
   currencyExponent,
   formatDate,
+  formatDay,
+  formatMonth,
   formatMoney,
   parseMoney,
   type CurrencyCode,

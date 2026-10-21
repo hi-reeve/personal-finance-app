@@ -11,6 +11,7 @@ import {
 } from "./format";
 import { convertMinor, normalizeRate } from "./rates";
 import {
+  categoryTotals,
   dailyTotals,
   monthlyTotals,
   spendingByCategory,
@@ -86,6 +87,30 @@ export interface TransferFee {
   /** Rate to the base currency when the fee is charged in another currency. */
   rate?: string;
 }
+
+/** A monthly limit on an expense Category, counting everything inside it. Base currency. */
+export interface Budget {
+  categoryId: string;
+  /** Whole minor units of the base currency, above zero. */
+  amount: number;
+}
+
+export type BudgetState = "on-track" | "near" | "over";
+
+export interface BudgetProgress extends Budget {
+  name: string;
+  /** What the Category and everything inside it spent in the period, net of refunds. */
+  spent: number;
+  /** The amount left; negative when over. */
+  remaining: number;
+  /** `spent` of `amount` in basis points (10,000 is 100%), never below zero. */
+  used: number;
+  /** `near` from the near-limit setting up to the amount itself; `over` only above it. */
+  state: BudgetState;
+}
+
+/** Where a budget turns to "near" when the setting is not chosen. */
+export const DEFAULT_NEAR_LIMIT = 80;
 
 /** Money moved between two of the user's own Accounts. Not income or expense. */
 export interface Transfer {
@@ -184,12 +209,16 @@ export interface Settings {
   /** How numbers are written, the same on every device. Absent until chosen: a device then uses its own locale. */
   numberFormat?: NumberFormat;
   dateFormat?: DateFormat;
+  /** Percent of a budget at which it counts as near its limit. Absent means the default, 80. */
+  budgetNearLimit?: number;
 }
 
 /** The synced preferences. Theme, accent, language and hide-amounts are per device and not here. */
 export interface Preferences {
   numberFormat: NumberFormat;
   dateFormat: DateFormat;
+  /** A whole percent from 1 to 99. */
+  budgetNearLimit: number;
 }
 
 export interface NewLine {
@@ -333,6 +362,13 @@ export interface Engine {
   spendingByCategory(query: SpendingQuery): Promise<SpendingByCategory>;
   /** The same counting rules, day by day over the period. */
   dailyTotals(query: SpendingQuery): Promise<DailyTotals>;
+  /** Sets the monthly budget on an expense Category, or changes it. One per Category. */
+  setBudget(categoryId: string, amount: number): Promise<Budget>;
+  removeBudget(categoryId: string): Promise<void>;
+  /** Budgets whose Category still exists, following merges. */
+  listBudgets(): Promise<Budget[]>;
+  /** How each budget stands over a period. A Transaction is never blocked by any of this. */
+  budgetProgress(period: { from: string; to: string }): Promise<BudgetProgress[]>;
   /** Income and spending per calendar month across a range, for trends. */
   monthlyTotals(query: { from: string; to: string }): Promise<MonthlyTotals>;
   /** Live Transactions, oldest date first. A Transfer's fee is included; the Transfer is not. */
@@ -358,6 +394,7 @@ const TRANSFER_FIELDS = [
   "toAmount",
 ] as const;
 const SETTINGS_ID = "settings";
+const isNearLimit = (value: number) => Number.isInteger(value) && value >= 1 && value <= 99;
 const NUMBER_FORMATS: readonly NumberFormat[] = ["dot-comma", "comma-dot"];
 
 const byId = (a: { id: string }, b: { id: string }) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
@@ -376,6 +413,7 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
   const tags = new Map<string, Fields>();
   const taggings = new Map<string, Fields>();
   const transfers = new Map<string, Fields>();
+  const budgets = new Map<string, Fields>();
   const tables: Record<Entity, Map<string, Fields>> = {
     transaction: transactions,
     line: lines,
@@ -385,6 +423,7 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
     tag: tags,
     tagging: taggings,
     transfer: transfers,
+    budget: budgets,
   };
   const table = (entity: Entity) => tables[entity];
 
@@ -618,12 +657,16 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
         : undefined;
     const dateFormat =
       storedDate !== undefined && dateFormats.includes(storedDate) ? storedDate : undefined;
+    const storedNear = f.get("budgetNearLimit")?.value;
+    const budgetNearLimit =
+      storedNear !== undefined && isNearLimit(Number(storedNear)) ? Number(storedNear) : undefined;
     return {
       ...(baseCurrency !== undefined ? { baseCurrency } : {}),
       ...(setupAt !== undefined ? { setupAt: Number(setupAt) } : {}),
       ...(defaultOk ? { defaultAccountId: chosen } : {}),
       ...(numberFormat ? { numberFormat } : {}),
       ...(dateFormat ? { dateFormat } : {}),
+      ...(budgetNearLimit !== undefined ? { budgetNearLimit } : {}),
     };
   }
 
@@ -973,6 +1016,27 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
     >;
   }
 
+  /** Live budgets on live expense Categories, following merges; the newest wins if two merge into one. */
+  function currentBudgets(): Budget[] {
+    const byCategory = new Map<string, { budget: Budget; edited: Hlc }>();
+    for (const f of budgets.values()) {
+      if (Number(f.get("deletedAt")?.value ?? 0) > 0) continue;
+      const target = resolveCategory(text(f, "categoryId")!);
+      if (!isLiveCategory(target) || categoryKind(target) !== "expense") continue;
+      const edited = lastEdited(f);
+      const current = byCategory.get(target);
+      if (current === undefined || compareHlc(edited, current.edited) > 0)
+        byCategory.set(target, {
+          budget: { categoryId: target, amount: Number(f.get("amount")!.value) },
+          edited,
+        });
+    }
+    const order = allCategories().map((c) => c.id);
+    return [...byCategory.values()]
+      .map((entry) => entry.budget)
+      .sort((a, b) => order.indexOf(a.categoryId) - order.indexOf(b.categoryId));
+  }
+
   function reportInput(query: SpendingQuery): SpendingInput {
     return {
       ...query,
@@ -1084,6 +1148,8 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
         throw new Error(`Invalid number format "${patch.numberFormat}"`);
       if (patch.dateFormat !== undefined && !dateFormats.includes(patch.dateFormat))
         throw new Error(`Invalid date format "${patch.dateFormat}"`);
+      if (patch.budgetNearLimit !== undefined && !isNearLimit(patch.budgetNearLimit))
+        throw new Error(`The near-limit setting must be a whole percent from 1 to 99`);
       // Only what is named is written; an explicit `undefined` is not a change.
       const named = Object.fromEntries(
         Object.entries(patch).filter(([, value]) => value !== undefined),
@@ -1362,6 +1428,48 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
     spendingByCategory: async (query) => spendingByCategory(reportInput(query)),
     dailyTotals: async (query) => dailyTotals(reportInput(query)),
     monthlyTotals: async (query) => monthlyTotals(reportInput(query)),
+    async setBudget(categoryId, amount) {
+      assertCategory(categoryId);
+      if (categoryKind(categoryId) !== "expense")
+        throw new Error("A budget goes on an expense Category");
+      assertAmount(amount);
+      if (amount <= 0) throw new Error("A budget must be above zero");
+      // One record per Category, so two devices setting the same budget write to the same fields.
+      await commit(opsFor("budget", `budget-${categoryId}`, { categoryId, amount, deletedAt: 0 }));
+      return { categoryId, amount };
+    },
+    async removeBudget(categoryId) {
+      const id = `budget-${categoryId}`;
+      const f = budgets.get(id);
+      if (f === undefined || Number(f.get("deletedAt")?.value ?? 0) > 0)
+        throw new Error(`There is no budget on Category ${categoryId}`);
+      await commit(opsFor("budget", id, { deletedAt: clock.now() }));
+    },
+    listBudgets: async () => currentBudgets(),
+    async budgetProgress(period) {
+      const found = currentBudgets();
+      if (found.length === 0) return [];
+      const totals = categoryTotals(reportInput({ ...period, kind: "expense" }));
+      const near = readSettings().budgetNearLimit ?? DEFAULT_NEAR_LIMIT;
+      return found.map(({ categoryId, amount }) => {
+        const spent = totals.get(categoryId) ?? 0;
+        const used = Number(
+          (BigInt(Math.max(spent, 0)) * 10_000n + BigInt(amount) / 2n) / BigInt(amount),
+        );
+        // Compared on the exact amounts, so a rounded percentage never changes the state.
+        const state: BudgetState =
+          spent > amount ? "over" : spent * 100 >= amount * near ? "near" : "on-track";
+        return {
+          categoryId,
+          name: text(categories.get(categoryId)!, "name")!,
+          amount,
+          spent,
+          remaining: amount - spent,
+          used,
+          state,
+        };
+      });
+    },
     async listTransactions() {
       const live = [...transactions.keys()].flatMap((id) => readTransaction(id) ?? []);
       return live.sort((a, b) => (a.date === b.date ? byId(a, b) : a.date < b.date ? -1 : 1));

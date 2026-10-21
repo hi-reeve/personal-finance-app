@@ -330,3 +330,29 @@ export function monthlyTotals(input: Omit<SpendingInput, "kind">): MonthlyTotals
   }
   return result;
 }
+
+/**
+ * What each Category spent in the period, with everything inside it added in: a parent's total
+ * covers its children. Same counting rules as every report, in the base currency. Categories with
+ * no spending are absent.
+ */
+export function categoryTotals(input: SpendingInput): Map<string, number> {
+  const kind = input.kind ?? "expense";
+  const { base, from, to } = input;
+  if (!ISO_DATE.test(from) || !ISO_DATE.test(to) || from > to)
+    throw new Error(`Invalid period ${from} to ${to}: expected YYYY-MM-DD dates, earliest first`);
+  const totals = new Map<string, number>();
+  if (base === undefined) return totals;
+  const known = new Map(input.categories.map((c) => [c.id, c]));
+  const { lines } = countLines(input, kind, base, known);
+  for (const line of lines) {
+    // Walk up the tree, so the Category and every ancestor count it once.
+    const seen = new Set<string>();
+    for (let id: string | undefined = line.categoryId; id !== undefined && !seen.has(id);) {
+      seen.add(id);
+      totals.set(id, (totals.get(id) ?? 0) + line.value);
+      id = known.get(id)?.parentId;
+    }
+  }
+  return totals;
+}

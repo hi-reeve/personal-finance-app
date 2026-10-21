@@ -26,7 +26,11 @@ describe("synced settings", () => {
       random: { bytes: (n) => crypto.getRandomValues(new Uint8Array(n)) },
       store: createMemoryStore(),
     });
-    await engine.setPreferences({ numberFormat: "dot-comma", dateFormat: "iso" });
+    await engine.setPreferences({
+      numberFormat: "dot-comma",
+      dateFormat: "iso",
+      budgetNearLimit: 85,
+    });
     const logged = (await engine.exportOps()).map((op) => op.field).sort();
     expect(logged).toEqual([...synced].sort());
   });

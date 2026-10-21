@@ -30,12 +30,16 @@ function Section({
 }) {
   const { t } = useLocale();
   return (
-    <section className="rounded-xl border border-line bg-surface p-4" aria-labelledby={id}>
+    <section
+      className="rounded-xl border border-line bg-surface p-4"
+      aria-labelledby={id}
+      aria-describedby={scope !== undefined ? `${id}-scope` : undefined}
+    >
       <h2 id={id} className="font-medium">
         {title}
       </h2>
       {scope !== undefined && (
-        <p className="mb-3 text-sm text-ink-muted" data-scope={scope}>
+        <p id={`${id}-scope`} className="mb-3 text-sm text-ink-muted" data-scope={scope}>
           {scope === "synced" ? t.settings_scope_synced() : t.settings_scope_device()}
         </p>
       )}
@@ -75,7 +79,7 @@ function Settings() {
         {t.preview_subtitle({ version: PROTOCOL_VERSION })}
       </p>
 
-      <Section id="language" title={t.settings_formats()} scope="device">
+      <Section id="language" title={t.settings_language()} scope="device">
         <LanguageChoice />
       </Section>
 

@@ -54,8 +54,11 @@ for (const layout of Object.keys(SIZES) as Layout[]) {
           : box.y > 40 && box.y + box.height < viewport.height - 40;
       })
       .toBe(true);
-    await page.keyboard.press("Escape");
-    await expect(dialog).toBeHidden();
+    // The dialog starts listening for Escape a moment after it opens: press until it closes.
+    await expect(async () => {
+      await page.keyboard.press("Escape");
+      await expect(dialog).toBeHidden({ timeout: 500 });
+    }).toPass();
   });
 }
 

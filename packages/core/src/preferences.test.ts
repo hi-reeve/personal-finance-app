@@ -74,6 +74,40 @@ describe("synced preferences", () => {
     expect(engine.getSettings()).toMatchObject({ baseCurrency: "IDR", numberFormat: "dot-comma" });
   });
 
+  it("write nothing for an empty change or a value left undefined", async () => {
+    const { engine } = await device();
+    await engine.setPreferences({});
+    // A caller may spread optional values; the types forbid it, a loose caller may still do it.
+    await engine.setPreferences({ numberFormat: undefined, dateFormat: undefined } as never);
+    expect(await engine.exportOps()).toEqual([]);
+  });
+
+  it("ignore a value they do not know, such as one from a newer app", async () => {
+    const { engine } = await device();
+    await engine.setPreferences({ numberFormat: "dot-comma" });
+    await engine.applyOps([
+      {
+        id: "from-the-future-1",
+        hlc: { wall: NOW + 5_000, counter: 0, device: "dev-z" },
+        entity: "settings",
+        recordId: "settings",
+        field: "dateFormat",
+        value: "weekday-first",
+      },
+      {
+        id: "from-the-future-2",
+        hlc: { wall: NOW + 6_000, counter: 0, device: "dev-z" },
+        entity: "settings",
+        recordId: "settings",
+        field: "numberFormat",
+        value: "indian-lakh",
+      },
+    ]);
+    const settings = engine.getSettings();
+    expect(settings.dateFormat).toBeUndefined();
+    expect(settings.numberFormat).toBeUndefined();
+  });
+
   it("refuse a value that is not one of the choices, and write nothing", async () => {
     const { engine } = await device();
     await expect(engine.setPreferences({ numberFormat: "1 234,5" as never })).rejects.toThrow();

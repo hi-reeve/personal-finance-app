@@ -273,7 +273,6 @@
   "accent_plum": "Ungu plum",
   "colors_classic": "Klasik",
   "colors_colorblind": "Ramah buta warna",
-  "settings_formats": "Bahasa",
   "settings_privacy": "Privasi",
   "settings_scope_synced": "Disinkronkan ke semua perangkat Anda",
   "settings_scope_device": "Hanya perangkat ini",
@@ -284,5 +283,6 @@
   "hide_start_shown": "Selalu ditampilkan",
   "settings_hide_note": "Sembunyikan jumlah menampilkan titik, bukan angka.",
   "settings_synced_failed": "Tidak dapat menyimpan pengaturan: {message}",
-  "settings_numbers_dates": "Angka dan tanggal"
+  "settings_numbers_dates": "Angka dan tanggal",
+  "settings_language": "Bahasa"
 }

@@ -16,7 +16,7 @@ const KIND_LABEL = {
 
 /** First run: language, base currency and the first Account. No sign-up. */
 export function Welcome() {
-  const { t, language } = useLocale();
+  const { t, language, numberFormat } = useLocale();
   const app = useApp();
   const [currency, setCurrency] = useState<CurrencyCode>(language === "id" ? "IDR" : "USD");
   const [name, setName] = useState("");
@@ -35,6 +35,9 @@ export function Welcome() {
         baseCurrency: currency,
         account: { name: trimmed, kind, currency, openingBalance: 0 },
       });
+      // The number format chosen here belongs to the synced settings, so other devices share it.
+      // Setup is already done, so a failure here leaves the format on this device only.
+      await app.act((engine) => engine.setPreferences({ numberFormat })).catch(() => {});
     } catch (error) {
       setProblem(
         t.welcome_failed({ message: error instanceof Error ? error.message : String(error) }),

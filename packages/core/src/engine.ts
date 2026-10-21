@@ -605,8 +605,15 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
       chosen !== "" &&
       isLiveAccount(chosen) &&
       archivedAt(accounts.get(chosen)!) === undefined;
-    const numberFormat = text(f, "numberFormat") as NumberFormat | undefined;
-    const dateFormat = text(f, "dateFormat") as DateFormat | undefined;
+    // A value this app does not know, from a newer app on another device, is ignored.
+    const storedNumber = text(f, "numberFormat") as NumberFormat | undefined;
+    const storedDate = text(f, "dateFormat") as DateFormat | undefined;
+    const numberFormat =
+      storedNumber !== undefined && NUMBER_FORMATS.includes(storedNumber)
+        ? storedNumber
+        : undefined;
+    const dateFormat =
+      storedDate !== undefined && dateFormats.includes(storedDate) ? storedDate : undefined;
     return {
       ...(baseCurrency !== undefined ? { baseCurrency } : {}),
       ...(setupAt !== undefined ? { setupAt: Number(setupAt) } : {}),
@@ -1073,7 +1080,11 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
         throw new Error(`Invalid number format "${patch.numberFormat}"`);
       if (patch.dateFormat !== undefined && !dateFormats.includes(patch.dateFormat))
         throw new Error(`Invalid date format "${patch.dateFormat}"`);
-      await commit(opsFor("settings", SETTINGS_ID, { ...patch }));
+      // Only what is named is written; an explicit `undefined` is not a change.
+      const named = Object.fromEntries(
+        Object.entries(patch).filter(([, value]) => value !== undefined),
+      );
+      await commit(opsFor("settings", SETTINGS_ID, named));
     },
     async completeSetup({ baseCurrency, account }) {
       if (readSettings().baseCurrency !== undefined) throw new Error("Setup is already complete");

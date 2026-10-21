@@ -109,7 +109,21 @@ describe("hide amounts when the app opens", () => {
     expect(opened("shown", "1")).toBe("shown");
   });
 
-  it("only carries a toggle over to next time while it remembers", () => {
+  it("carries a toggle over to next time while it remembers", () => {
+    function Toggler() {
+      const hide = useHideAmounts();
+      useEffect(() => hide.toggle(), []);
+      return null;
+    }
+    render(
+      <HideAmountsProvider>
+        <Toggler />
+      </HideAmountsProvider>,
+    );
+    expect(localStorage.getItem("pfa.hideAmounts")).toBe("1");
+  });
+
+  it("does not carry a toggle over to next time once the start is fixed", () => {
     function Toggler() {
       const hide = useHideAmounts();
       useEffect(() => hide.toggle(), []);

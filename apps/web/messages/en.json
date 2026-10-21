@@ -273,7 +273,6 @@
   "accent_plum": "Plum",
   "colors_classic": "Classic",
   "colors_colorblind": "Colour-blind safe",
-  "settings_formats": "Language",
   "settings_privacy": "Privacy",
   "settings_scope_synced": "Synced across your devices",
   "settings_scope_device": "This device only",
@@ -284,5 +283,6 @@
   "hide_start_shown": "Always shown",
   "settings_hide_note": "Hide amounts shows dots instead of numbers.",
   "settings_synced_failed": "Could not save the setting: {message}",
-  "settings_numbers_dates": "Numbers and dates"
+  "settings_numbers_dates": "Numbers and dates",
+  "settings_language": "Language"
 }

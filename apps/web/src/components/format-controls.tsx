@@ -13,12 +13,16 @@ export function SyncedFormatControls() {
   const app = useApp();
   const [problem, setProblem] = useState<string | undefined>(undefined);
 
+  /** Saves to the synced settings; on failure puts this device back as it was and says so. */
   async function save(patch: { numberFormat?: NumberFormat; dateFormat?: DateFormat }) {
+    const before = { numberFormat, dateFormat };
     setProblem(undefined);
     if (app.status !== "ready") return;
     try {
       await app.act((engine) => engine.setPreferences(patch));
     } catch (error) {
+      if (patch.numberFormat !== undefined) setNumberFormat(before.numberFormat);
+      if (patch.dateFormat !== undefined) setDateFormat(before.dateFormat);
       setProblem(
         t.settings_synced_failed({
           message: error instanceof Error ? error.message : String(error),

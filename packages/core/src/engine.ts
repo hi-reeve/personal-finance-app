@@ -1020,7 +1020,9 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
   function currentBudgets(): Budget[] {
     const byCategory = new Map<string, { budget: Budget; edited: Hlc }>();
     for (const f of budgets.values()) {
-      if (Number(f.get("deletedAt")?.value ?? 0) > 0) continue;
+      // A tombstone can arrive before the budget it removes; only a complete record counts.
+      if (Number(f.get("deletedAt")?.value ?? 0) > 0 || !f.has("amount") || !f.has("categoryId"))
+        continue;
       const target = resolveCategory(text(f, "categoryId")!);
       if (!isLiveCategory(target) || categoryKind(target) !== "expense") continue;
       const edited = lastEdited(f);
@@ -1031,10 +1033,10 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
           edited,
         });
     }
-    const order = allCategories().map((c) => c.id);
+    const order = new Map(allCategories().map((c, index) => [c.id, index]));
     return [...byCategory.values()]
       .map((entry) => entry.budget)
-      .sort((a, b) => order.indexOf(a.categoryId) - order.indexOf(b.categoryId));
+      .sort((a, b) => (order.get(a.categoryId) ?? 0) - (order.get(b.categoryId) ?? 0));
   }
 
   function reportInput(query: SpendingQuery): SpendingInput {
@@ -1458,7 +1460,11 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
         );
         // Compared on the exact amounts, so a rounded percentage never changes the state.
         const state: BudgetState =
-          spent > amount ? "over" : spent * 100 >= amount * near ? "near" : "on-track";
+          spent > amount
+            ? "over"
+            : BigInt(spent) * 100n >= BigInt(amount) * BigInt(near)
+              ? "near"
+              : "on-track";
         return {
           categoryId,
           name: text(categories.get(categoryId)!, "name")!,

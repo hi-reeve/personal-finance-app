@@ -1,5 +1,5 @@
 import { DEFAULT_NEAR_LIMIT, formatDate, type DateFormat, type NumberFormat } from "@pfa/core";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useApp } from "../app/app-provider";
 import { Choice } from "./appearance";
 import { DATE_FORMATS, NUMBER_FORMATS, useLocale } from "./locale";
@@ -72,7 +72,7 @@ export function SyncedFormatControls() {
   );
 }
 
-/** The percent of a budget at which it counts as near its limit. Synced, saved as soon as it is valid. */
+/** The percent of a budget at which it counts as near its limit. Synced, saved when you leave the field. */
 export function BudgetLimitControl() {
   const { t } = useLocale();
   const app = useApp();
@@ -82,10 +82,35 @@ export function BudgetLimitControl() {
       : DEFAULT_NEAR_LIMIT;
   const [text, setText] = useState(String(saved));
   const [problem, setProblem] = useState<string | undefined>(undefined);
+  // Follows the shared setting, so a change made on another device shows up here.
+  useEffect(() => setText(String(saved)), [saved]);
   const valid = /^\d{1,2}$/.test(text.trim()) && Number(text) >= 1 && Number(text) <= 99;
 
+  async function save() {
+    if (!valid) return;
+    const percent = Number(text);
+    if (app.status !== "ready" || percent === saved) return;
+    setProblem(undefined);
+    try {
+      await app.act((engine) => engine.setPreferences({ budgetNearLimit: percent }));
+    } catch (error) {
+      setText(String(saved));
+      setProblem(
+        t.settings_synced_failed({
+          message: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    }
+  }
+
   return (
-    <div className="flex flex-col gap-1">
+    <form
+      className="flex flex-col gap-1"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void save();
+      }}
+    >
       <label className="flex flex-col gap-1">
         <span>{t.label_near_limit()}</span>
         <input
@@ -94,29 +119,14 @@ export function BudgetLimitControl() {
           aria-invalid={!valid}
           aria-describedby="near-limit-help"
           value={text}
-          onChange={async (event) => {
-            const next = event.target.value;
-            setText(next);
-            setProblem(undefined);
-            const percent = Number(next);
-            if (!/^\d{1,2}$/.test(next.trim()) || percent < 1 || percent > 99) return;
-            if (app.status !== "ready" || percent === saved) return;
-            try {
-              await app.act((engine) => engine.setPreferences({ budgetNearLimit: percent }));
-            } catch (error) {
-              setProblem(
-                t.settings_synced_failed({
-                  message: error instanceof Error ? error.message : String(error),
-                }),
-              );
-            }
-          }}
+          onChange={(event) => setText(event.target.value)}
+          onBlur={() => void save()}
         />
       </label>
-      <p id="near-limit-help" className="text-sm text-danger" role={valid ? undefined : "alert"}>
+      <p id="near-limit-help" role="alert" className="min-h-5 text-sm text-danger">
         {valid ? "" : t.near_limit_invalid()}
         {problem}
       </p>
-    </div>
+    </form>
   );
 }

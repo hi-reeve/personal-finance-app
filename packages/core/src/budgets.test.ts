@@ -139,6 +139,14 @@ describe("category budgets", () => {
     expect(engine.getSettings().budgetNearLimit).toBe(90);
   });
 
+  it("judge the state on exact amounts even when they are huge", async () => {
+    const { engine, cash, fuel, spend } = await month();
+    const limit = 9_000_000_000_000_000; // near the largest whole amount a safe integer holds
+    await engine.setBudget(fuel.id, limit);
+    await spend(cash.id, fuel.id, -(limit * 0.9 + 1));
+    expect((await engine.budgetProgress(october))[0]!.state).toBe("near");
+  });
+
   it("never block a Transaction, however far over", async () => {
     const { engine, cash, fuel, spend } = await month();
     await engine.setBudget(fuel.id, 1_000);

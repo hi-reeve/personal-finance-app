@@ -72,7 +72,8 @@ test("a budget counts what is inside the Category, shows three states, and never
 
   // The near-limit line is a setting: at 90% Food is on track again.
   await page.goto("/settings");
-  await page.getByLabel(/Warn me when a budget reaches/).fill("90");
+  await page.getByLabel(/Near-limit line/).fill("90");
+  await page.getByLabel(/Near-limit line/).blur();
   // Move on inside the app, so the save is not cut off by a page load.
   await page.getByRole("link", { name: "Budgets" }).and(page.locator(":visible")).first().click();
   await expect(card(page, "Food")).toContainText("On track");

@@ -36,7 +36,9 @@ export function BudgetCard({
     near: t.budget_state_near(),
     over: t.budget_state_over(),
   }[budget.state];
-  const percent = Math.round(budget.used / 100);
+  // Never reads as a line it has not reached: 79.6% shows as 79%, and over shows rounded up.
+  const percent =
+    budget.state === "over" ? Math.ceil(budget.used / 100) : Math.floor(budget.used / 100);
   const left =
     budget.remaining >= 0
       ? t.budget_left({ amount: money(budget.remaining, currency) })

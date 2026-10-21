@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import { formatDate, formatMoney, parseMoney } from "./index";
+import { dateFormats, formatDate, formatMoney, parseMoney } from "./index";
 
 const dotComma = { numberFormat: "dot-comma" } as const;
 const commaDot = { numberFormat: "comma-dot" } as const;
@@ -82,5 +82,24 @@ describe("parseMoney", () => {
     }
     expect(parseMoney("1.234", "USD", commaDot)).toBeUndefined();
     expect(parseMoney("99999999999999999", "IDR", dotComma)).toBeUndefined();
+  });
+});
+
+describe("formatDate with a chosen format", () => {
+  it("writes the same day in each format", () => {
+    expect(formatDate("2026-10-08", "en", "medium")).toBe("8 Oct 2026");
+    expect(formatDate("2026-10-08", "id", "medium")).toBe("8 Okt 2026");
+    expect(formatDate("2026-10-08", "en", "day-month-year")).toBe("08/10/2026");
+    expect(formatDate("2026-10-08", "id", "month-day-year")).toBe("10/08/2026");
+    expect(formatDate("2026-10-08", "en", "iso")).toBe("2026-10-08");
+  });
+
+  it("keeps the medium format when none is chosen, and lists every choice", () => {
+    expect(formatDate("2026-10-18", "id")).toBe("18 Okt 2026");
+    expect([...dateFormats]).toEqual(["medium", "day-month-year", "month-day-year", "iso"]);
+  });
+
+  it("still rejects a date that does not exist", () => {
+    expect(() => formatDate("2026-02-30", "en", "iso")).toThrow();
   });
 });

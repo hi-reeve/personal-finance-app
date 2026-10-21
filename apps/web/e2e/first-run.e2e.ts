@@ -38,6 +38,18 @@ test("a new user sets up with no sign-up, and it is all still there after a relo
   await expect(page.locator("[data-level]")).toBeVisible();
 });
 
+test("the number format chosen at setup is kept in the synced settings", async ({ page }) => {
+  await page.goto("/");
+  await page.getByLabel("1.234,50").check({ force: true });
+  await page.getByRole("button", { name: "Start" }).click();
+  await expect(page.locator("[data-nav]").first()).toBeAttached();
+  // With this browser's own copy wiped, the shared settings still hold it.
+  await page.evaluate(() => localStorage.removeItem("pfa.number-format"));
+  await page.reload();
+  await page.goto("/settings");
+  await expect(page.getByRole("region", { name: "Amounts" })).toContainText("Rp 25.000");
+});
+
 test("the setup screen follows the chosen language", async ({ page }) => {
   await page.goto("/");
   await page.getByLabel("Bahasa Indonesia").check({ force: true });

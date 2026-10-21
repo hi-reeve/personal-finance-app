@@ -3,6 +3,7 @@ import { HeadContent, Outlet, Scripts, createRootRoute } from "@tanstack/react-r
 import { themeCss } from "@pfa/tokens";
 import { APPEARANCE_INIT_SCRIPT, AppearanceProvider } from "../components/appearance";
 import { ActivityFilterProvider } from "../app/activity-filter-state";
+import { SyncedPreferences } from "../app/synced-preferences";
 import { AppGate } from "../app/app-gate";
 import { AppProvider } from "../app/app-provider";
 import { LocalOnlyBanner } from "../app/local-only-banner";
@@ -54,6 +55,7 @@ function Root() {
             onInstall={pwa.install}
           />
           <AppProvider>
+            <SyncedPreferences />
             <ActivityFilterProvider>
               <AppGate>
                 <AppShell>

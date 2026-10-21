@@ -10,7 +10,8 @@ export type Entity =
   | "category"
   | "tag"
   | "tagging"
-  | "transfer";
+  | "transfer"
+  | "budget";
 
 /** One field of one record set to a value. The op log is a list of these. */
 export interface Op {

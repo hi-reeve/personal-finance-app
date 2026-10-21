@@ -1,8 +1,9 @@
-import { formatDate, type DateFormat, type NumberFormat } from "@pfa/core";
-import { useState } from "react";
+import { DEFAULT_NEAR_LIMIT, formatDate, type DateFormat, type NumberFormat } from "@pfa/core";
+import { useEffect, useState } from "react";
 import { useApp } from "../app/app-provider";
 import { Choice } from "./appearance";
 import { DATE_FORMATS, NUMBER_FORMATS, useLocale } from "./locale";
+import { FIELD } from "./styles";
 
 /**
  * Number and date format, kept in the synced settings so every device agrees. The change applies
@@ -68,5 +69,64 @@ export function SyncedFormatControls() {
         </p>
       )}
     </div>
+  );
+}
+
+/** The percent of a budget at which it counts as near its limit. Synced, saved when you leave the field. */
+export function BudgetLimitControl() {
+  const { t } = useLocale();
+  const app = useApp();
+  const saved =
+    app.status === "ready"
+      ? (app.settings.budgetNearLimit ?? DEFAULT_NEAR_LIMIT)
+      : DEFAULT_NEAR_LIMIT;
+  const [text, setText] = useState(String(saved));
+  const [problem, setProblem] = useState<string | undefined>(undefined);
+  // Follows the shared setting, so a change made on another device shows up here.
+  useEffect(() => setText(String(saved)), [saved]);
+  const valid = /^\d{1,2}$/.test(text.trim()) && Number(text) >= 1 && Number(text) <= 99;
+
+  async function save() {
+    if (!valid) return;
+    const percent = Number(text);
+    if (app.status !== "ready" || percent === saved) return;
+    setProblem(undefined);
+    try {
+      await app.act((engine) => engine.setPreferences({ budgetNearLimit: percent }));
+    } catch (error) {
+      setText(String(saved));
+      setProblem(
+        t.settings_synced_failed({
+          message: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    }
+  }
+
+  return (
+    <form
+      className="flex flex-col gap-1"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void save();
+      }}
+    >
+      <label className="flex flex-col gap-1">
+        <span>{t.label_near_limit()}</span>
+        <input
+          className={`${FIELD} max-w-32`}
+          inputMode="numeric"
+          aria-invalid={!valid}
+          aria-describedby="near-limit-help"
+          value={text}
+          onChange={(event) => setText(event.target.value)}
+          onBlur={() => void save()}
+        />
+      </label>
+      <p id="near-limit-help" role="alert" className="min-h-5 text-sm text-danger">
+        {valid ? "" : t.near_limit_invalid()}
+        {problem}
+      </p>
+    </form>
   );
 }

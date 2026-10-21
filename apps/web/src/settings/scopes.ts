@@ -10,6 +10,7 @@ export type Scope = "synced" | "device";
 const SYNCED = {
   numberFormat: "synced",
   dateFormat: "synced",
+  budgetNearLimit: "synced",
 } as const satisfies Record<keyof Preferences, "synced">;
 
 const DEVICE = {

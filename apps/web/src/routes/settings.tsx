@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { Amount } from "../components/amount";
 import { AppearanceControls, Choice } from "../components/appearance";
-import { SyncedFormatControls } from "../components/format-controls";
+import { BudgetLimitControl, SyncedFormatControls } from "../components/format-controls";
 import {
   HIDE_START_CHOICES,
   HideAmountsToggle,
@@ -85,6 +85,10 @@ function Settings() {
 
       <Section id="formats" title={t.settings_numbers_dates()} scope="synced">
         <SyncedFormatControls />
+      </Section>
+
+      <Section id="budgets" title={t.settings_budgets()} scope="synced">
+        <BudgetLimitControl />
       </Section>
 
       <Section id="appearance" title={t.section_appearance()} scope="device">

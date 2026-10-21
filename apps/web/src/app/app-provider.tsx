@@ -1,6 +1,7 @@
 import {
   createEngine,
   type Account,
+  type Budget,
   type Category,
   type CurrencyCode,
   type Engine,
@@ -52,6 +53,8 @@ export interface AccountView extends Account {
 export interface Snapshot {
   settings: Settings;
   accounts: AccountView[];
+  /** Monthly budgets, one per expense Category. */
+  budgets: Budget[];
   /** Live Transfers, newest first. */
   transfers: Transfer[];
   /** Live Transactions, newest first; a Transfer's fee is among them. */
@@ -119,6 +122,7 @@ async function snapshot(engine: Engine): Promise<Snapshot> {
     transfers: [...(await engine.listTransfers())].sort(newestFirst),
     categories,
     categoryUse,
+    budgets: await engine.listBudgets(),
     recentCategories,
     tags,
   };

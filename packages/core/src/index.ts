@@ -42,6 +42,10 @@ export {
 } from "./validate";
 export {
   BALANCE_ADJUSTMENT_CATEGORY,
+  DEFAULT_NEAR_LIMIT,
+  type Budget,
+  type BudgetProgress,
+  type BudgetState,
   createEngine,
   signedAmount,
   type Account,

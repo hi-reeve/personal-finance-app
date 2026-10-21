@@ -2,7 +2,13 @@ import type { Clock, OpStore, Random } from "./adapters";
 import { compareHlc, type Hlc } from "./hlc";
 import { newUuidV7 } from "./ids";
 import type { Entity, Op, OpValue } from "./ops";
-import { currencyCodes, type CurrencyCode } from "./format";
+import {
+  currencyCodes,
+  dateFormats,
+  type CurrencyCode,
+  type DateFormat,
+  type NumberFormat,
+} from "./format";
 import { convertMinor, normalizeRate } from "./rates";
 import {
   dailyTotals,
@@ -173,6 +179,15 @@ export interface Settings {
   setupAt?: number;
   /** The Account Add starts on. Absent when none is chosen or it was archived or deleted. */
   defaultAccountId?: string;
+  /** How numbers are written, the same on every device. Absent until chosen: a device then uses its own locale. */
+  numberFormat?: NumberFormat;
+  dateFormat?: DateFormat;
+}
+
+/** The synced preferences. Theme, accent, language and hide-amounts are per device and not here. */
+export interface Preferences {
+  numberFormat: NumberFormat;
+  dateFormat: DateFormat;
 }
 
 export interface NewLine {
@@ -239,6 +254,8 @@ export interface Engine {
   /** Marks the Transaction deleted with a tombstone; history stays in the op log. */
   deleteTransaction(id: string): Promise<void>;
   getTransaction(id: string): Promise<Transaction | undefined>;
+  /** Changes the synced preferences in one write; anything not named stays as it is. */
+  setPreferences(patch: Partial<Preferences>): Promise<void>;
   /** Synced settings as they stand now. */
   getSettings(): Settings;
   /**
@@ -337,6 +354,7 @@ const TRANSFER_FIELDS = [
   "toAmount",
 ] as const;
 const SETTINGS_ID = "settings";
+const NUMBER_FORMATS: readonly NumberFormat[] = ["dot-comma", "comma-dot"];
 
 const byId = (a: { id: string }, b: { id: string }) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 
@@ -587,10 +605,14 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
       chosen !== "" &&
       isLiveAccount(chosen) &&
       archivedAt(accounts.get(chosen)!) === undefined;
+    const numberFormat = text(f, "numberFormat") as NumberFormat | undefined;
+    const dateFormat = text(f, "dateFormat") as DateFormat | undefined;
     return {
       ...(baseCurrency !== undefined ? { baseCurrency } : {}),
       ...(setupAt !== undefined ? { setupAt: Number(setupAt) } : {}),
       ...(defaultOk ? { defaultAccountId: chosen } : {}),
+      ...(numberFormat ? { numberFormat } : {}),
+      ...(dateFormat ? { dateFormat } : {}),
     };
   }
 
@@ -1046,6 +1068,13 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
     },
     getTransaction: async (id) => readTransaction(id),
     getSettings: readSettings,
+    async setPreferences(patch) {
+      if (patch.numberFormat !== undefined && !NUMBER_FORMATS.includes(patch.numberFormat))
+        throw new Error(`Invalid number format "${patch.numberFormat}"`);
+      if (patch.dateFormat !== undefined && !dateFormats.includes(patch.dateFormat))
+        throw new Error(`Invalid date format "${patch.dateFormat}"`);
+      await commit(opsFor("settings", SETTINGS_ID, { ...patch }));
+    },
     async completeSetup({ baseCurrency, account }) {
       if (readSettings().baseCurrency !== undefined) throw new Error("Setup is already complete");
       assertCurrency(baseCurrency);

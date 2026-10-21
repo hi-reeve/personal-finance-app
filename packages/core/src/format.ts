@@ -101,10 +101,28 @@ export function parseMoney(
 
 const DATE_LOCALES = { id, en: enUS };
 
-/** A plain `YYYY-MM-DD` date as "18 Okt 2026" / "18 Oct 2026". No time zone is involved. */
-export function formatDate(date: string, language: Language): string {
+/** How a full date is written. `medium` spells the month in the language; the others are numeric. */
+export const dateFormats = ["medium", "day-month-year", "month-day-year", "iso"] as const;
+export type DateFormat = (typeof dateFormats)[number];
+
+const DATE_PATTERNS: Record<DateFormat, string> = {
+  medium: "d MMM yyyy",
+  "day-month-year": "dd/MM/yyyy",
+  "month-day-year": "MM/dd/yyyy",
+  iso: "yyyy-MM-dd",
+};
+
+/**
+ * A plain `YYYY-MM-DD` date as "18 Okt 2026" (the default), "18/10/2026", "10/18/2026" or
+ * "2026-10-18". No time zone is involved.
+ */
+export function formatDate(
+  date: string,
+  language: Language,
+  dateFormat: DateFormat = "medium",
+): string {
   assertDate(date);
-  return format(parse(date, "yyyy-MM-dd", new Date(0)), "d MMM yyyy", {
+  return format(parse(date, "yyyy-MM-dd", new Date(0)), DATE_PATTERNS[dateFormat], {
     locale: DATE_LOCALES[language],
   });
 }

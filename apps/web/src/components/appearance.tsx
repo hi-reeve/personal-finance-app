@@ -1,5 +1,6 @@
 import { SegmentGroup } from "@ark-ui/react/segment-group";
 import { accentNames, colorPresetNames } from "@pfa/tokens";
+import { m } from "../paraglide/messages.js";
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
 const STORAGE_KEY = "pfa.appearance";
@@ -83,24 +84,6 @@ export function useAppearance(): AppearanceState {
   return useContext(AppearanceContext);
 }
 
-const THEME_LABEL: Record<Appearance["theme"], string> = {
-  system: "System",
-  light: "Light",
-  dark: "Dark",
-};
-const ACCENT_LABEL: Record<Appearance["accent"], string> = {
-  terracotta: "Terracotta",
-  brown: "Brown",
-  teal: "Teal",
-  slate: "Slate blue",
-  sage: "Sage",
-  plum: "Plum",
-};
-const COLOR_LABEL: Record<Appearance["colors"], string> = {
-  classic: "Classic",
-  colorblind: "Colour-blind safe",
-};
-
 /** The selected choice is marked with a check as well as a fill, so it never relies on colour alone. */
 function CheckMark() {
   return (
@@ -157,26 +140,43 @@ export function Choice<T extends string>({
 
 export function AppearanceControls() {
   const { appearance, setAppearance } = useAppearance();
+  const themeLabels: Record<Appearance["theme"], string> = {
+    system: m.theme_system(),
+    light: m.theme_light(),
+    dark: m.theme_dark(),
+  };
+  const accentLabels: Record<Appearance["accent"], string> = {
+    terracotta: m.accent_terracotta(),
+    brown: m.accent_brown(),
+    teal: m.accent_teal(),
+    slate: m.accent_slate(),
+    sage: m.accent_sage(),
+    plum: m.accent_plum(),
+  };
+  const colorLabels: Record<Appearance["colors"], string> = {
+    classic: m.colors_classic(),
+    colorblind: m.colors_colorblind(),
+  };
   return (
     <div className="flex flex-col gap-4">
       <Choice
-        label="Theme"
+        label={m.label_theme()}
         options={THEME_CHOICES}
-        labels={THEME_LABEL}
+        labels={themeLabels}
         value={appearance.theme}
         onChange={(theme) => setAppearance({ theme })}
       />
       <Choice
-        label="Accent colour"
+        label={m.label_accent()}
         options={ACCENT_CHOICES}
-        labels={ACCENT_LABEL}
+        labels={accentLabels}
         value={appearance.accent}
         onChange={(accent) => setAppearance({ accent })}
       />
       <Choice
-        label="Income and expense colours"
+        label={m.label_colors()}
         options={COLOR_CHOICES}
-        labels={COLOR_LABEL}
+        labels={colorLabels}
         value={appearance.colors}
         onChange={(colors) => setAppearance({ colors })}
       />

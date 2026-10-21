@@ -293,6 +293,5 @@
   "tree_collapse": "Hide what is inside {name}",
   "tree_own": "Recorded directly in {name}",
   "tree_summary": "The biggest of {count} is {name} at {share}% ({amount}). Open a category to see what is inside it.",
-  "tree_none": "No spending to break down yet.",
-  "tree_table_category": "Category"
+  "tree_none": "No spending to break down yet."
 }

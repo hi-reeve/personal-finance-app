@@ -20,6 +20,7 @@ const spending: SpendingByCategory = {
       total: 280_000,
       own: 160_000,
       share: 9_180,
+      ownShare: 5_246,
       children: [
         {
           categoryId: "groceries",
@@ -27,6 +28,7 @@ const spending: SpendingByCategory = {
           total: 70_000,
           own: 70_000,
           share: 2_295,
+          ownShare: 2_295,
           children: [],
         },
         {
@@ -35,12 +37,29 @@ const spending: SpendingByCategory = {
           total: 50_000,
           own: 50_000,
           share: 1_639,
+          ownShare: 1_639,
           children: [],
         },
       ],
     },
-    { categoryId: "fuel", name: "Fuel", total: 20_000, own: 20_000, share: 656, children: [] },
-    { categoryId: "ghost", missing: true, total: 5_000, own: 5_000, share: 164, children: [] },
+    {
+      categoryId: "fuel",
+      name: "Fuel",
+      total: 20_000,
+      own: 20_000,
+      share: 656,
+      ownShare: 656,
+      children: [],
+    },
+    {
+      categoryId: "ghost",
+      missing: true,
+      total: 5_000,
+      own: 5_000,
+      share: 164,
+      ownShare: 164,
+      children: [],
+    },
   ],
 };
 
@@ -107,9 +126,10 @@ describe("CategoryTree", () => {
     expect(rows).toHaveLength(7);
     expect(rows[1]!.textContent).toContain("Food");
     expect(rows[1]!.textContent).toContain("280,000");
-    expect(rows[4]!.textContent).toContain("Recorded directly in Food");
-    expect(rows[4]!.textContent).toContain("160,000");
-    expect(rows[4]!.textContent).toContain("52.5%");
+    // Biggest first, the Lines recorded straight into Food among its children.
+    expect(rows[2]!.textContent).toContain("Recorded directly in Food");
+    expect(rows[2]!.textContent).toContain("160,000");
+    expect(rows[2]!.textContent).toContain("52.5%");
   });
 
   it("hides amounts but not names or shares, and draws every bar the same length", () => {

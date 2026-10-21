@@ -293,6 +293,5 @@
   "tree_collapse": "Sembunyikan isi {name}",
   "tree_own": "Dicatat langsung di {name}",
   "tree_summary": "Yang terbesar dari {count} adalah {name} sebesar {share}% ({amount}). Buka kategori untuk melihat isinya.",
-  "tree_none": "Belum ada pengeluaran untuk dirinci.",
-  "tree_table_category": "Kategori"
+  "tree_none": "Belum ada pengeluaran untuk dirinci."
 }

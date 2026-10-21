@@ -123,4 +123,5 @@ test("the Categories view opens a Category into what is inside it, with the same
   // The choice is remembered on this device.
   await page.reload();
   await expect(page.getByRole("region", { name: "Spending by category" })).toBeVisible();
+  await expect(page.getByLabel("Categories", { exact: true })).toBeChecked();
 });

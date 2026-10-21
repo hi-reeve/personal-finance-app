@@ -25,20 +25,21 @@ function rowsOf(
   missing: string,
 ): Row[] {
   return nodes
-    .filter((node) => node.total > 0)
+    .filter((node) => node.total !== 0)
     .map((node) => {
       const name = node.name ?? missing;
       const inside = rowsOf(node.children, depth + 1, own, missing);
-      const childShare = node.children.reduce((sum, child) => sum + child.share, 0);
-      if (inside.length > 0 && node.own > 0)
+      if (inside.length > 0 && node.own !== 0)
         inside.push({
           key: `${node.categoryId}:own`,
           name: own(name),
           total: node.own,
-          share: Math.max(node.share - childShare, 0),
+          share: node.ownShare,
           depth: depth + 1,
           children: [],
         });
+      // Largest first, the Lines recorded straight into the parent among them.
+      inside.sort((a, b) => b.total - a.total);
       return {
         key: node.categoryId,
         name,
@@ -99,7 +100,10 @@ export function CategoryTree({
                 <span className="truncate">{row.name}</span>
               </button>
             ) : (
-              <span className="min-h-11 min-w-0 truncate py-2 ps-6">{row.name}</span>
+              <span className="flex min-h-11 min-w-0 items-center gap-2">
+                <span aria-hidden="true" className="inline-block w-[1ch]" />
+                <span className="truncate">{row.name}</span>
+              </span>
             )}
             <span className="flex shrink-0 items-baseline gap-2">
               <Amount direction="neutral" variant="list" formatted={money(row.total, currency)} />
@@ -146,7 +150,7 @@ export function CategoryTree({
               <thead>
                 <tr>
                   <th scope="col" className="py-1 text-start">
-                    {t.tree_table_category()}
+                    {t.chart_category()}
                   </th>
                   <th scope="col" className="py-1 text-end">
                     {t.chart_amount()}

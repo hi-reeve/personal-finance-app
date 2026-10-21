@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Choice } from "../components/appearance";
 import { useLocale } from "../components/locale";
 
@@ -19,17 +19,15 @@ function readView(): HomeView {
 /** Which Home view is showing. A device-local choice, remembered on this device. */
 export function useHomeView(): [HomeView, (view: HomeView) => void] {
   const [view, setView] = useState<HomeView>(readView);
-  return [
-    view,
-    (next) => {
-      try {
-        localStorage.setItem(KEY, next);
-      } catch {
-        // The choice then lasts only for this visit.
-      }
-      setView(next);
-    },
-  ];
+  const choose = useCallback((next: HomeView) => {
+    try {
+      localStorage.setItem(KEY, next);
+    } catch {
+      // The choice then lasts only for this visit.
+    }
+    setView(next);
+  }, []);
+  return [view, choose];
 }
 
 export function ViewSwitcher({

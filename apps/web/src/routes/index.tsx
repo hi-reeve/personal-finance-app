@@ -7,7 +7,7 @@ import { HideAmountsToggle } from "../components/hide-amounts";
 import { useLocale } from "../components/locale";
 import { Page } from "../components/page";
 import { CategoryTree } from "../dashboard/category-tree";
-import { Hero } from "../dashboard/summary-view";
+import { Hero, SkippedNote } from "../dashboard/summary-view";
 import { ViewSwitcher, useHomeView } from "../dashboard/view-switcher";
 import { PeriodSelector } from "../dashboard/period-selector";
 import { SummaryView } from "../dashboard/summary-view";
@@ -39,8 +39,13 @@ function Dashboard({ app }: { app: ReadyState }) {
           {view === "summary" ? (
             <SummaryView data={summary.data} />
           ) : (
-            <CategoryTree spending={summary.data.spending} currency={summary.data.currency} />
+            <CategoryTree
+              key={summary.data.period.from}
+              spending={summary.data.spending}
+              currency={summary.data.currency}
+            />
           )}
+          <SkippedNote data={summary.data} />
         </>
       ) : summary.status === "error" ? (
         <p role="alert" className="text-danger">

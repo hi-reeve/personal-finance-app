@@ -7,7 +7,7 @@ import { DailyChart } from "./daily-chart";
 import type { SummaryData } from "./use-summary";
 
 /** The headline: what was spent, and how that compares with the month before. */
-function Hero({ data }: { data: SummaryData }) {
+export function Hero({ data }: { data: SummaryData }) {
   const { t, money, month, numberFormat } = useLocale();
   const text = useMoneyText();
   const spent = data.spending.total;
@@ -72,7 +72,6 @@ export function SummaryView({ data }: { data: SummaryData }) {
   const skipped = data.spending.skipped.lines;
   return (
     <div className="flex flex-col gap-6">
-      <Hero data={data} />
       <Cards data={data} />
       <DailyChart daily={data.daily} currency={data.currency} />
       <CategoryBars spending={data.spending} currency={data.currency} />

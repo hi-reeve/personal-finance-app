@@ -6,6 +6,9 @@ import { useApp, type ReadyState } from "../app/app-provider";
 import { HideAmountsToggle } from "../components/hide-amounts";
 import { useLocale } from "../components/locale";
 import { Page } from "../components/page";
+import { CategoryTree } from "../dashboard/category-tree";
+import { Hero } from "../dashboard/summary-view";
+import { ViewSwitcher, useHomeView } from "../dashboard/view-switcher";
 import { PeriodSelector } from "../dashboard/period-selector";
 import { SummaryView } from "../dashboard/summary-view";
 import { useSummary } from "../dashboard/use-summary";
@@ -22,14 +25,23 @@ function Dashboard({ app }: { app: ReadyState }) {
   const { t } = useLocale();
   const [period, setPeriod] = useState<Period>(() => monthOf(today()));
   const summary = useSummary(app, period);
+  const [view, setView] = useHomeView();
   return (
     <Page title={t.app_name()}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <PeriodSelector period={period} onChange={setPeriod} />
         <HideAmountsToggle />
       </div>
+      <ViewSwitcher value={view} onChange={setView} />
       {summary.status === "ready" ? (
-        <SummaryView data={summary.data} />
+        <>
+          <Hero data={summary.data} />
+          {view === "summary" ? (
+            <SummaryView data={summary.data} />
+          ) : (
+            <CategoryTree spending={summary.data.spending} currency={summary.data.currency} />
+          )}
+        </>
       ) : summary.status === "error" ? (
         <p role="alert" className="text-danger">
           {summary.message}

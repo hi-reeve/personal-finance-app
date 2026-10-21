@@ -284,5 +284,14 @@
   "settings_hide_note": "Hide amounts shows dots instead of numbers.",
   "settings_synced_failed": "Could not save the setting: {message}",
   "settings_numbers_dates": "Numbers and dates",
-  "settings_language": "Language"
+  "settings_language": "Language",
+  "view_label": "Home view",
+  "view_summary": "Summary",
+  "view_categories": "Categories",
+  "tree_heading": "Spending by category",
+  "tree_expand": "Show what is inside {name}",
+  "tree_collapse": "Hide what is inside {name}",
+  "tree_own": "Recorded directly in {name}",
+  "tree_summary": "The biggest of {count} is {name} at {share}% ({amount}). Open a category to see what is inside it.",
+  "tree_none": "No spending to break down yet."
 }

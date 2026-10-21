@@ -7,7 +7,7 @@ import { DailyChart } from "./daily-chart";
 import type { SummaryData } from "./use-summary";
 
 /** The headline: what was spent, and how that compares with the month before. */
-function Hero({ data }: { data: SummaryData }) {
+export function Hero({ data }: { data: SummaryData }) {
   const { t, money, month, numberFormat } = useLocale();
   const text = useMoneyText();
   const spent = data.spending.total;
@@ -68,17 +68,20 @@ function Cards({ data }: { data: SummaryData }) {
 
 /** The Home Summary view. Every figure comes from the report engine, so views never disagree. */
 export function SummaryView({ data }: { data: SummaryData }) {
-  const { t } = useLocale();
-  const skipped = data.spending.skipped.lines;
   return (
     <div className="flex flex-col gap-6">
-      <Hero data={data} />
       <Cards data={data} />
       <DailyChart daily={data.daily} currency={data.currency} />
       <CategoryBars spending={data.spending} currency={data.currency} />
-      {skipped > 0 && (
-        <p className="text-sm text-ink-muted">{t.skipped_note({ count: skipped })}</p>
-      )}
     </div>
   );
+}
+
+/** Said under every view, so a gap in the figures is never unexplained. */
+export function SkippedNote({ data }: { data: SummaryData }) {
+  const { t } = useLocale();
+  const skipped = data.spending.skipped.lines;
+  return skipped > 0 ? (
+    <p className="text-sm text-ink-muted">{t.skipped_note({ count: skipped })}</p>
+  ) : null;
 }

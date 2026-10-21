@@ -30,9 +30,33 @@ const spending: SpendingByCategory = {
   total: 305_000,
   skipped: { lines: 0 },
   categories: [
-    { categoryId: "food", name: "Food", total: 280_000, own: 0, share: 9_180, children: [] },
-    { categoryId: "fuel", name: "Fuel", total: 20_000, own: 20_000, share: 656, children: [] },
-    { categoryId: "ghost", missing: true, total: 5_000, own: 5_000, share: 164, children: [] },
+    {
+      categoryId: "food",
+      name: "Food",
+      total: 280_000,
+      own: 0,
+      share: 9_180,
+      ownShare: 0,
+      children: [],
+    },
+    {
+      categoryId: "fuel",
+      name: "Fuel",
+      total: 20_000,
+      own: 20_000,
+      share: 656,
+      ownShare: 0,
+      children: [],
+    },
+    {
+      categoryId: "ghost",
+      missing: true,
+      total: 5_000,
+      own: 5_000,
+      share: 164,
+      ownShare: 0,
+      children: [],
+    },
   ],
 };
 

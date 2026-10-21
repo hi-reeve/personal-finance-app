@@ -22,6 +22,8 @@ export interface CategorySpend {
   own: number;
   /** Of the whole report, in basis points (10,000 is 100%). */
   share: number;
+  /** The part of `share` that belongs to `own`; the rest is split among the children. */
+  ownShare: number;
   /** Largest first. */
   children: CategorySpend[];
 }
@@ -197,6 +199,7 @@ export function spendingByCategory(input: SpendingInput): SpendingByCategory {
       total: (mine ?? 0) + children.reduce((sum, child) => sum + child.total, 0),
       own: mine ?? 0,
       share: 0,
+      ownShare: 0,
       children,
     };
   };
@@ -224,6 +227,7 @@ export function spendingByCategory(input: SpendingInput): SpendingByCategory {
       child.share = parts[index] ?? 0;
       descend(child);
     });
+    node.ownShare = parts[node.children.length] ?? 0;
   };
   give(tops, 10_000);
   tops.forEach(descend);

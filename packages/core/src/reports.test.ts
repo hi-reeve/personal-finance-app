@@ -117,6 +117,14 @@ describe("spending by category", () => {
     expect(categories[0]!.children.map((c) => c.share)).toEqual([2_295, 1_639]);
   });
 
+  it("gives a parent's own Lines their own share, so the parts add up to the whole", async () => {
+    const { engine } = await october();
+    const [food] = (await engine.spendingByCategory(period)).categories;
+    const children = food!.children.reduce((sum, child) => sum + child.share, 0);
+    expect(food!.ownShare + children).toBe(food!.share);
+    expect(food!.ownShare).toBe(5_246);
+  });
+
   it("counts each Line under its own Category, even in a split", async () => {
     const { engine, fuel } = await october();
     const { categories } = await engine.spendingByCategory({

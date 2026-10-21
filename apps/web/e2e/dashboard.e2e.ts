@@ -77,3 +77,51 @@ test("Home answers where the money went, and every number has a text and a table
   await expect(main).toContainText("No spending recorded in");
   await expect(main).toContainText("No spending to rank yet.");
 });
+
+test("the Categories view opens a Category into what is inside it, with the same numbers", async ({
+  page,
+}) => {
+  await openApp(page, "/categories");
+  await page.goto("/categories");
+  await addCategory(page, "Food");
+  await addCategory(page, "Groceries", "Expense", "Food");
+  await addCategory(page, "Fuel");
+
+  await page.goto("/activity");
+  await addTransaction(page, "70", "Groceries", "Superindo");
+  await addTransaction(page, "30", "Food", "Warung");
+  await addTransaction(page, "50", "Fuel", "Shell");
+
+  await page.goto("/");
+  const main = page.getByRole("main");
+  await expect(main).toContainText("you spent $150.00");
+  const summaryTop = await page
+    .getByRole("region", { name: "Top categories" })
+    .getByRole("listitem")
+    .first()
+    .textContent();
+  expect(summaryTop).toContain("Food");
+  expect(summaryTop).toContain("$100.00");
+  expect(summaryTop).toContain("66.7%");
+
+  // Switch views: the headline stays, and the Category tree shows the same Food figures.
+  await page.getByLabel("Categories", { exact: true }).check({ force: true });
+  await expect(main).toContainText("you spent $150.00");
+  const tree = page.getByRole("region", { name: "Spending by category" });
+  await expect(tree).toContainText("$100.00");
+  await expect(tree).toContainText("66.7%");
+  // The bars, not the table below them that repeats every row.
+  const bars = tree.getByRole("list").first();
+  await expect(bars.getByText("Groceries")).toHaveCount(0);
+
+  await tree.getByRole("button", { name: "Show what is inside Food" }).click();
+  await expect(bars.getByText("Groceries")).toBeVisible();
+  await expect(bars).toContainText("Recorded directly in Food");
+  await tree.getByRole("button", { name: "Hide what is inside Food" }).click();
+  await expect(bars.getByText("Groceries")).toHaveCount(0);
+
+  // The choice is remembered on this device.
+  await page.reload();
+  await expect(page.getByRole("region", { name: "Spending by category" })).toBeVisible();
+  await expect(page.getByLabel("Categories", { exact: true })).toBeChecked();
+});

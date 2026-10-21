@@ -284,5 +284,14 @@
   "settings_hide_note": "Sembunyikan jumlah menampilkan titik, bukan angka.",
   "settings_synced_failed": "Tidak dapat menyimpan pengaturan: {message}",
   "settings_numbers_dates": "Angka dan tanggal",
-  "settings_language": "Bahasa"
+  "settings_language": "Bahasa",
+  "view_label": "Tampilan Beranda",
+  "view_summary": "Ringkasan",
+  "view_categories": "Kategori",
+  "tree_heading": "Pengeluaran per kategori",
+  "tree_expand": "Tampilkan isi {name}",
+  "tree_collapse": "Sembunyikan isi {name}",
+  "tree_own": "Dicatat langsung di {name}",
+  "tree_summary": "Yang terbesar dari {count} adalah {name} sebesar {share}% ({amount}). Buka kategori untuk melihat isinya.",
+  "tree_none": "Belum ada pengeluaran untuk dirinci."
 }

@@ -13,6 +13,7 @@ const spending: SpendingByCategory = {
   to: "2026-10-31",
   total: 305_000,
   skipped: { lines: 0 },
+  noRate: [],
   categories: [
     {
       categoryId: "food",

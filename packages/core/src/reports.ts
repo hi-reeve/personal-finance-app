@@ -9,6 +9,13 @@ export interface SpendingQuery {
   to: string;
   /** What to total: `expense` (default) or `income`. */
   kind?: CategoryKind;
+  /**
+   * Today's rate for each foreign currency, as plain decimal text (units of the base currency per
+   * one of it). Given, foreign-currency Lines are reconverted at these instead of at the rate
+   * frozen with their Transaction; base-currency Lines never change. A currency with no usable
+   * rate is left out and named in `noRate`: nothing is guessed. Absent, the report is as recorded.
+   */
+  todayRates?: Readonly<Record<string, string>>;
 }
 
 export interface CategorySpend {
@@ -39,6 +46,8 @@ export interface SpendingByCategory {
   categories: CategorySpend[];
   /** Lines left out because no rate could convert them. */
   skipped: { lines: number };
+  /** Currencies whose Lines were left out for want of a rate, in code order. */
+  noRate: CurrencyCode[];
 }
 
 export interface SpendingInput extends SpendingQuery {
@@ -86,6 +95,8 @@ function push<K, V>(map: Map<K, V[]>, key: K, value: V) {
 
 /** One Line that counts, in the base currency, positive when it adds to the report's kind. */
 interface CountedLine {
+  /** The Transaction and Line it came from, to tell the same Line apart in two conversions. */
+  ref: string;
   date: string;
   categoryId: string;
   value: number;
@@ -100,8 +111,9 @@ function countLines(
   kind: CategoryKind,
   base: CurrencyCode,
   known: ReadonlyMap<string, Category>,
-): { lines: CountedLine[]; skipped: number } {
+): { lines: CountedLine[]; skipped: number; noRate: CurrencyCode[] } {
   const lines: CountedLine[] = [];
+  const missing = new Set<CurrencyCode>();
   let skipped = 0;
   for (const tx of input.transactions) {
     if (tx.date < input.from || tx.date > input.to) continue;
@@ -113,25 +125,29 @@ function countLines(
       if (lineKind !== kind) continue;
       let amount: number | undefined;
       if (currency === base) amount = line.amount;
-      else if (currency !== undefined && tx.rate !== undefined) {
-        try {
-          amount = convertMinor(line.amount, tx.rate, currency, base);
-        } catch {
-          // A rate or amount that cannot be converted is counted, not allowed to sink the report.
-        }
+      else if (currency !== undefined) {
+        const rate = input.todayRates !== undefined ? input.todayRates[currency] : tx.rate;
+        if (rate !== undefined)
+          try {
+            amount = convertMinor(line.amount, rate, currency, base);
+          } catch {
+            // A rate or amount that cannot be converted is counted, not allowed to sink the report.
+          }
       }
       if (amount === undefined) {
         skipped += 1;
+        if (currency !== undefined) missing.add(currency);
         continue;
       }
       lines.push({
+        ref: `${tx.id}/${line.id}`,
         date: tx.date,
         categoryId: line.categoryId,
         value: kind === "expense" ? -amount : amount,
       });
     }
   }
-  return { lines, skipped };
+  return { lines, skipped, noRate: [...missing].sort() };
 }
 
 /**
@@ -153,12 +169,14 @@ export function spendingByCategory(input: SpendingInput): SpendingByCategory {
     total: 0,
     categories: [],
     skipped: { lines: 0 },
+    noRate: [],
   };
   if (base === undefined) return result;
 
   const known = new Map(input.categories.map((c) => [c.id, c]));
   const counted = countLines(input, kind, base, known);
   result.skipped.lines = counted.skipped;
+  result.noRate = counted.noRate;
   const figures = new Map<string, number>();
   for (const line of counted.lines)
     figures.set(line.categoryId, (figures.get(line.categoryId) ?? 0) + line.value);
@@ -355,4 +373,64 @@ export function categoryTotals(input: SpendingInput): Map<string, number> {
     }
   }
   return totals;
+}
+
+export interface RateEffect {
+  currency?: CurrencyCode;
+  kind: CategoryKind;
+  from: string;
+  to: string;
+  /** The Lines both views could convert, at the rates frozen with their Transactions. */
+  asRecorded: number;
+  /** The same Lines at today's rates. */
+  atTodaysRate: number;
+  /** `atTodaysRate` less `asRecorded`: positive when the same money would cost more today. */
+  difference: number;
+  /** Currencies with no rate today. Their Lines are in neither figure. */
+  noRate: CurrencyCode[];
+  /** Lines left out of both figures because one view could not convert them. */
+  skipped: { lines: number };
+}
+
+/**
+ * What switching a period from "as recorded" to "at today's rate" would change, over the same
+ * Lines in both so a missing rate never skews the difference. Base-currency Lines add the same to
+ * both. `todayRates` is required.
+ */
+export function rateEffect(
+  input: SpendingInput & { todayRates: Readonly<Record<string, string>> },
+): RateEffect {
+  const kind = input.kind ?? "expense";
+  const { base, from, to, todayRates } = input;
+  if (!ISO_DATE.test(from) || !ISO_DATE.test(to) || from > to)
+    throw new Error(`Invalid period ${from} to ${to}: expected YYYY-MM-DD dates, earliest first`);
+  const result: RateEffect = {
+    ...(base !== undefined ? { currency: base } : {}),
+    kind,
+    from,
+    to,
+    asRecorded: 0,
+    atTodaysRate: 0,
+    difference: 0,
+    noRate: [],
+    skipped: { lines: 0 },
+  };
+  if (base === undefined) return result;
+  const known = new Map(input.categories.map((c) => [c.id, c]));
+  const { todayRates: _ignored, ...plain } = input;
+  const recorded = countLines(plain, kind, base, known);
+  const today = countLines({ ...plain, todayRates }, kind, base, known);
+  const now = new Map(today.lines.map((line) => [line.ref, line.value]));
+  let both = 0;
+  for (const line of recorded.lines) {
+    const value = now.get(line.ref);
+    if (value === undefined) continue;
+    both += 1;
+    result.asRecorded += line.value;
+    result.atTodaysRate += value;
+  }
+  result.difference = result.atTodaysRate - result.asRecorded;
+  result.noRate = today.noRate;
+  result.skipped.lines = recorded.lines.length + recorded.skipped - both;
+  return result;
 }

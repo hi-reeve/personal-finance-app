@@ -50,9 +50,11 @@ import {
   categoryTotals,
   dailyTotals,
   monthlyTotals,
+  rateEffect,
   spendingByCategory,
   type DailyTotals,
   type MonthlyTotals,
+  type RateEffect,
   type SpendingInput,
   type SpendingByCategory,
   type SpendingQuery,
@@ -383,6 +385,13 @@ export interface Engine {
    * currency "as recorded". See `spendingByCategory` for the counting rules.
    */
   spendingByCategory(query: SpendingQuery): Promise<SpendingByCategory>;
+  /**
+   * How much "at today's rate" differs from "as recorded" over a period, for the same Lines in
+   * both. Core never fetches rates: the caller passes today's.
+   */
+  rateEffect(
+    query: SpendingQuery & Required<Pick<SpendingQuery, "todayRates">>,
+  ): Promise<RateEffect>;
   /** The same counting rules, day by day over the period. */
   dailyTotals(query: SpendingQuery): Promise<DailyTotals>;
   /**
@@ -454,7 +463,9 @@ export interface Engine {
   /** Skips every occurrence of the item before `before` that nobody acted on. Returns how many. */
   skipOlder(itemId: string, before: string): Promise<number>;
   /** Income and spending per calendar month across a range, for trends. */
-  monthlyTotals(query: { from: string; to: string }): Promise<MonthlyTotals>;
+  monthlyTotals(
+    query: { from: string; to: string } & Pick<SpendingQuery, "todayRates">,
+  ): Promise<MonthlyTotals>;
   /** Live Transactions, oldest date first. A Transfer's fee is included; the Transfer is not. */
   listTransactions(): Promise<Transaction[]>;
   /** Every op this device holds, to send to another device. */
@@ -1875,6 +1886,8 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
       return { lines: converted, total: converted.reduce((sum, amount) => sum + amount, 0) };
     },
     spendingByCategory: async (query) => spendingByCategory(reportInput(query)),
+    rateEffect: async (query) =>
+      rateEffect({ ...reportInput(query), todayRates: query.todayRates }),
     dailyTotals: async (query) => dailyTotals(reportInput(query)),
     monthlyTotals: async (query) => monthlyTotals(reportInput(query)),
     async setBudget(categoryId, amount, options = {}) {

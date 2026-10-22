@@ -12,6 +12,7 @@ import {
   startOfYear,
   subMonths,
 } from "date-fns";
+import type { BudgetPeriod } from "./budgets";
 import { assertDate } from "./validate";
 
 /** Two plain dates `YYYY-MM-DD`, both included. */
@@ -38,11 +39,7 @@ export function monthOf(date: string): Period {
  * The budget period around `date`. A month runs from `startDay` (1 to 28, so every month has it) to
  * the day before the next one; a week runs Monday to Sunday; a year is the calendar year.
  */
-export function budgetPeriodOf(
-  date: string,
-  kind: "month" | "week" | "year",
-  startDay = 1,
-): Period {
+export function budgetPeriodOf(date: string, kind: BudgetPeriod, startDay = 1): Period {
   const day = read(date);
   if (kind === "week") {
     const from = startOfWeek(day, { weekStartsOn: 1 });

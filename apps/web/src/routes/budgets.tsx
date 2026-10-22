@@ -1,8 +1,8 @@
-import { monthOf, type OverallBudgetProgress, type Period } from "@pfa/core";
+import { monthOf, type CurrencyCode, type OverallBudgetProgress, type Period } from "@pfa/core";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { today } from "../app/today";
-import { useApp, type ReadyState } from "../app/app-provider";
+import { useApp, type Change, type ReadyState } from "../app/app-provider";
 import { BudgetCard } from "../budgets/budget-card";
 import { BudgetForm } from "../budgets/budget-form";
 import { useBudgetProgress } from "../budgets/use-budgets";
@@ -22,17 +22,22 @@ function Budgets() {
 }
 
 /** Said under the overall budget: how much of it the Category budgets leave unassigned. */
-function Allocation({ overall, currency }: { overall: OverallBudgetProgress; currency: string }) {
+function Allocation({
+  overall,
+  currency,
+}: {
+  overall: OverallBudgetProgress;
+  currency: CurrencyCode;
+}) {
   const { t, money } = useLocale();
   const text = useMoneyText();
-  const code = currency as Parameters<typeof money>[1];
   return (
     <p className={`text-sm ${overall.unallocated < 0 ? "text-danger" : "text-ink-muted"}`}>
       {overall.unallocated < 0 && <span aria-hidden="true">! </span>}
       {text(
         overall.unallocated < 0
-          ? t.budget_over_allocated({ amount: money(-overall.unallocated, code) })
-          : t.budget_unallocated({ amount: money(overall.unallocated, code) }),
+          ? t.budget_over_allocated({ amount: money(-overall.unallocated, currency) })
+          : t.budget_unallocated({ amount: money(overall.unallocated, currency) }),
       )}
     </p>
   );
@@ -51,9 +56,7 @@ function BudgetList({ app }: { app: ReadyState }) {
   const currency = app.settings.baseCurrency ?? "USD";
   const close = () => setEditing(undefined);
 
-  async function remove(
-    removal: (engine: Parameters<Parameters<typeof app.act>[0]>[0]) => Promise<unknown>,
-  ) {
+  async function remove(removal: Change) {
     setProblem(undefined);
     try {
       await app.act(removal);

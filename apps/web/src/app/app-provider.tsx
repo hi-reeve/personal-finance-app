@@ -90,7 +90,10 @@ export type AppState = { status: "loading" } | { status: "error"; message: strin
 type CompleteSetup = (input: { baseCurrency: CurrencyCode; account: NewAccount }) => Promise<void>;
 
 /** Runs a change on the engine, then refreshes what the screens show. */
-type Act = (change: (engine: Engine) => Promise<unknown>) => Promise<void>;
+/** A change to run on the engine. */
+export type Change = (engine: Engine) => Promise<unknown>;
+
+type Act = (change: Change) => Promise<void>;
 
 const AppContext = createContext<AppState>({ status: "loading" });
 

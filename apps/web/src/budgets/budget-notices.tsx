@@ -1,6 +1,6 @@
 import { thresholdCrossings, type ThresholdCrossed } from "@pfa/core";
 import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
-import type { ReadyState } from "../app/app-provider";
+import type { Change, ReadyState } from "../app/app-provider";
 import { useLocale } from "../components/locale";
 import { BUTTON } from "../components/styles";
 
@@ -17,7 +17,7 @@ export const useBudgetNotices = () => useContext(NoticeContext);
  */
 export function useSaveWithWarning(
   app: ReadyState,
-): (date: string, change: ChangeFn) => Promise<void> {
+): (date: string, change: Change) => Promise<void> {
   const notify = useBudgetNotices();
   return useCallback(
     async (date, change) => {
@@ -32,8 +32,6 @@ export function useSaveWithWarning(
     [app, notify],
   );
 }
-
-type ChangeFn = Parameters<ReadyState["act"]>[0];
 
 export function BudgetNotices({ children }: { children: ReactNode }) {
   const { t } = useLocale();

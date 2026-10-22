@@ -96,6 +96,26 @@ export function BudgetCard({
           )}
         </p>
       )}
+      {budget.expected > 0 && (
+        <p className="text-sm text-ink-muted">
+          {text(t.budget_expected({ amount: money(budget.expected, currency) }))}
+          {" · "}
+          {text(
+            budget.remaining - budget.expected >= 0
+              ? t.budget_after_bills({
+                  amount: money(budget.remaining - budget.expected, currency),
+                })
+              : t.budget_after_bills_over({
+                  amount: money(budget.expected - budget.remaining, currency),
+                }),
+          )}
+        </p>
+      )}
+      {budget.expectedSkipped > 0 && (
+        <p className="text-sm text-ink-muted">
+          {t.budget_expected_skipped({ count: budget.expectedSkipped })}
+        </p>
+      )}
       {note}
       <div className="flex gap-2">
         <button

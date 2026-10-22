@@ -1,6 +1,9 @@
 export { budgetPeriodOf, daysIn, monthOf, shiftMonth, type Period } from "./periods";
 export {
   DEFAULT_DUE_SOON_DAYS,
+  isPausedOn,
+  monthlyEquivalent,
+  priceOn,
   RECURRING_KINDS,
   RECURRING_UNITS,
   type MarkPaidOptions,
@@ -8,11 +11,14 @@ export {
   type Occurrence,
   type OccurrenceQuery,
   type OccurrenceStatus,
+  type PriceChange,
   type RecurringItem,
   type RecurringKind,
   type RecurringPatch,
   type RecurringUnit,
   type Schedule,
+  type SubscriptionEntry,
+  type SubscriptionSummary,
 } from "./recurring";
 export {
   BUDGET_PERIODS,

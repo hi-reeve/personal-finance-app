@@ -2,6 +2,7 @@ import {
   RECURRING_KINDS,
   RECURRING_UNITS,
   parseMoney,
+  priceOn,
   type RecurringItem,
   type RecurringKind,
   type RecurringUnit,
@@ -39,7 +40,13 @@ export function RecurringForm({
   );
   const [categoryId, setCategoryId] = useState<string | undefined>(item?.categoryId);
   const account = app.accounts.find((a) => a.id === accountId);
-  const [amount, setAmount] = useState(item && account ? plain(item.amount, account.currency) : "");
+  const now = today();
+  const currentPrice = item ? priceOn(item, now) : undefined;
+  const [amount, setAmount] = useState(
+    item && account && currentPrice !== undefined ? plain(currentPrice, account.currency) : "",
+  );
+  const [priceFrom, setPriceFrom] = useState(now);
+  const [subscription, setSubscription] = useState(item?.subscription ?? false);
   const [every, setEvery] = useState(String(item?.every ?? 1));
   const [unit, setUnit] = useState<RecurringUnit>(item?.unit ?? "month");
   const [start, setStart] = useState(item?.start ?? today());
@@ -81,23 +88,28 @@ export function RecurringForm({
         unit,
         start,
         lastDay: lastDay && (unit === "month" || unit === "year"),
+        subscription: kind === "expense" && subscription,
       };
-      await app.act((engine) =>
-        item === undefined
-          ? engine.createRecurring({
-              ...shared,
-              ...(kind === "transfer" ? { toAccountId } : { categoryId: categoryId! }),
-              ...(end === "date" ? { endDate } : {}),
-              ...(count !== undefined ? { endCount: count } : {}),
-            })
-          : engine.updateRecurring(item.id, {
-              ...shared,
-              toAccountId: kind === "transfer" ? toAccountId : null,
-              categoryId: kind === "transfer" ? null : categoryId!,
-              endDate: end === "date" ? endDate : null,
-              endCount: count ?? null,
-            }),
-      );
+      // A new price on a bill reaches occurrences from a date on; earlier ones keep theirs.
+      const repriced = item !== undefined && kind !== "transfer" && parsed !== currentPrice;
+      await app.act(async (engine) => {
+        if (item === undefined)
+          return engine.createRecurring({
+            ...shared,
+            ...(kind === "transfer" ? { toAccountId } : { categoryId: categoryId! }),
+            ...(end === "date" ? { endDate } : {}),
+            ...(count !== undefined ? { endCount: count } : {}),
+          });
+        const { amount: _unchanged, ...rest } = shared;
+        const updated = await engine.updateRecurring(item.id, {
+          ...(kind === "transfer" ? shared : rest),
+          toAccountId: kind === "transfer" ? toAccountId : null,
+          categoryId: kind === "transfer" ? null : categoryId!,
+          endDate: end === "date" ? endDate : null,
+          endCount: count ?? null,
+        });
+        return repriced ? engine.changeRecurringPrice(item.id, parsed, priceFrom) : updated;
+      });
       onDone();
     } catch (error) {
       setProblem(
@@ -213,6 +225,28 @@ export function RecurringForm({
           onChange={(e) => setStart(e.target.value)}
         />
       </label>
+      {item !== undefined && kind !== "transfer" && (
+        <label className="flex flex-col gap-1">
+          <span>{t.recurring_price_from()}</span>
+          <input
+            className={FIELD}
+            type="date"
+            value={priceFrom}
+            onChange={(e) => setPriceFrom(e.target.value)}
+          />
+        </label>
+      )}
+      {kind === "expense" && (
+        <label className="flex min-h-11 items-center gap-2">
+          <input
+            type="checkbox"
+            className="size-5 accent-accent"
+            checked={subscription}
+            onChange={(e) => setSubscription(e.target.checked)}
+          />
+          <span>{t.recurring_subscription()}</span>
+        </label>
+      )}
       {(unit === "month" || unit === "year") && (
         <label className="flex min-h-11 items-center gap-2">
           <input

@@ -1,3 +1,4 @@
+import { isPausedOn, priceOn } from "@pfa/core";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { today } from "../app/today";
@@ -9,6 +10,7 @@ import { BUTTON } from "../components/styles";
 import { OccurrenceRow } from "../recurring/occurrence-row";
 import { RecurringForm } from "../recurring/recurring-form";
 import { useOccurrences } from "../recurring/use-occurrences";
+import { useSubscriptions } from "../recurring/use-subscriptions";
 
 export const Route = createFileRoute("/recurring")({ component: Screen });
 
@@ -22,14 +24,19 @@ function Recurring({ app }: { app: ReadyState }) {
   const { t, money } = useLocale();
   const now = today();
   const state = useOccurrences(app, now);
+  const subscriptions = useSubscriptions(app, now);
   const [editing, setEditing] = useState<string | "new" | undefined>(undefined);
   const [problem, setProblem] = useState<string | undefined>(undefined);
   const close = () => setEditing(undefined);
 
   async function remove(id: string) {
+    await attempt((engine) => engine.deleteRecurring(id));
+  }
+
+  async function attempt(change: Parameters<typeof app.act>[0]) {
     setProblem(undefined);
     try {
-      await app.act((engine) => engine.deleteRecurring(id));
+      await app.act(change);
     } catch (error) {
       setProblem(
         t.recurring_failed({ message: error instanceof Error ? error.message : String(error) }),
@@ -89,6 +96,47 @@ function Recurring({ app }: { app: ReadyState }) {
           )}
         </>
       )}
+      <section aria-labelledby="subscriptions" className="flex flex-col gap-3">
+        <h2 id="subscriptions" className="text-lg font-medium">
+          {t.recurring_subscriptions()}
+        </h2>
+        {subscriptions !== undefined && subscriptions.subscriptions.length === 0 && (
+          <p className="text-ink-muted">{t.recurring_subscriptions_none()}</p>
+        )}
+        {subscriptions !== undefined && subscriptions.subscriptions.length > 0 && (
+          <>
+            <p className="flex flex-wrap gap-x-4 font-medium">
+              {subscriptions.monthly.map((total) => (
+                <span key={total.currency}>
+                  {t.recurring_monthly_total({ amount: money(total.amount, total.currency) })}
+                </span>
+              ))}
+            </p>
+            <ul className="flex flex-col gap-2">
+              {subscriptions.subscriptions.map((entry) => (
+                <li
+                  key={entry.itemId}
+                  className="flex flex-wrap items-baseline justify-between gap-2 rounded-xl border border-line bg-surface p-3"
+                >
+                  <span className="min-w-0 truncate">
+                    {entry.name}
+                    {entry.status !== "active" && (
+                      <span className="ms-2 text-sm text-ink-muted">
+                        {entry.status === "paused"
+                          ? t.recurring_status_paused()
+                          : t.recurring_status_ended()}
+                      </span>
+                    )}
+                  </span>
+                  <span className="text-sm text-ink-muted">
+                    {t.recurring_monthly_each({ amount: money(entry.monthly, entry.currency) })}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </section>
       <section aria-labelledby="items" className="flex flex-col gap-3">
         <h2 id="items" className="text-lg font-medium">
           {t.recurring_items()}
@@ -97,8 +145,9 @@ function Recurring({ app }: { app: ReadyState }) {
           <p className="text-ink-muted">{t.recurring_empty()}</p>
         )}
         <ul className="flex flex-col gap-3">
-          {app.recurring.map((item) =>
-            editing === item.id ? (
+          {app.recurring.map((item) => {
+            const paused = isPausedOn(item, now);
+            return editing === item.id ? (
               <li key={item.id}>
                 <RecurringForm app={app} item={item} onDone={close} onCancel={close} />
               </li>
@@ -119,7 +168,7 @@ function Recurring({ app }: { app: ReadyState }) {
                     }
                     variant="list"
                     formatted={money(
-                      item.amount,
+                      priceOn(item, now),
                       app.accounts.find((a) => a.id === item.accountId)?.currency ?? "USD",
                     )}
                   />
@@ -130,7 +179,27 @@ function Recurring({ app }: { app: ReadyState }) {
                     unit: t[`recurring_unit_${item.unit}`](),
                   })}
                 </p>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className={BUTTON}
+                    aria-label={
+                      paused
+                        ? t.recurring_resume({ name: item.name })
+                        : t.recurring_pause({ name: item.name })
+                    }
+                    onClick={() =>
+                      void attempt((engine) =>
+                        paused
+                          ? engine.resumeRecurring(item.id, now)
+                          : engine.pauseRecurring(item.id, now),
+                      )
+                    }
+                  >
+                    {isPausedOn(item, now)
+                      ? t.recurring_status_resume()
+                      : t.recurring_status_pause()}
+                  </button>
                   <button
                     type="button"
                     className={BUTTON}
@@ -149,8 +218,8 @@ function Recurring({ app }: { app: ReadyState }) {
                   </button>
                 </div>
               </li>
-            ),
-          )}
+            );
+          })}
         </ul>
         {editing === "new" ? (
           <RecurringForm app={app} onDone={close} onCancel={close} />

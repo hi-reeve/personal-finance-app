@@ -416,5 +416,21 @@
   "recurring_link_choose_for": "Link {label}",
   "recurring_expected_paid": "Expected {expected}, paid {paid}",
   "recurring_less": "{amount} less",
-  "recurring_more": "{amount} more"
+  "recurring_more": "{amount} more",
+  "recurring_subscription": "This is a subscription",
+  "recurring_price_from": "New price applies from",
+  "recurring_subscriptions": "Subscriptions",
+  "recurring_subscriptions_none": "No subscriptions yet. Mark a recurring expense as a subscription to see what it costs a month.",
+  "recurring_monthly_total": "{amount} a month",
+  "recurring_monthly_each": "{amount} a month",
+  "recurring_status_paused": "Paused",
+  "recurring_status_ended": "Ended",
+  "recurring_pause": "Pause {name}",
+  "recurring_resume": "Resume {name}",
+  "budget_expected": "Bills still to pay: {amount}",
+  "budget_after_bills": "After bills: {amount} left",
+  "budget_after_bills_over": "After bills: {amount} over",
+  "budget_expected_skipped": "Bills in another currency are not counted: {count}",
+  "recurring_status_resume": "Resume",
+  "recurring_status_pause": "Pause"
 }

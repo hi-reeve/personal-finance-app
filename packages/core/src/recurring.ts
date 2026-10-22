@@ -9,6 +9,7 @@ import {
   setDate,
   startOfMonth,
 } from "date-fns";
+import type { CurrencyCode } from "./format";
 
 export type RecurringKind = "expense" | "income" | "transfer";
 export type RecurringUnit = "day" | "week" | "month" | "year";
@@ -78,6 +79,14 @@ export function openStatus(
 export const daysBetween = (a: string, b: string): number =>
   differenceInCalendarDays(read(b), read(a));
 
+/** A price that applies to occurrences due on or after its date. */
+export interface PriceChange {
+  /** `YYYY-MM-DD`. */
+  effective: string;
+  /** Positive minor units of the Account's currency. */
+  amount: number;
+}
+
 /** A template: what is paid, from where, and how often. Occurrences are worked out from it. */
 export interface RecurringItem extends Schedule {
   id: string;
@@ -88,15 +97,28 @@ export interface RecurringItem extends Schedule {
   toAccountId?: string;
   /** Expense and income only; one Category in v1. */
   categoryId?: string;
-  /** Positive minor units of the Account's currency (a transfer's amount leaving it). */
+  /** Positive minor units of the Account's currency (a transfer's amount leaving it). The first
+   *  price: use `priceOn` for what an occurrence due on a date is expected to cost. */
   amount: number;
+  /** Later prices, oldest first. Occurrences before a change keep the price they had. */
+  changes: PriceChange[];
   /** Transfers only, when the other Account is in another currency. Defaults to `amount`. */
   toAmount?: number;
+  /** A recurring expense the person pays for a service, counted in the monthly total. */
+  subscription: boolean;
+  /** No occurrence is due from this date until `pausedUntil` (or for good, without one). */
+  pausedFrom?: string;
+  /** The day paying starts again; occurrences due before it stay out of the way. */
+  pausedUntil?: string;
   createdAt: number;
 }
 
-export type NewRecurring = Omit<RecurringItem, "id" | "createdAt" | "lastDay"> & {
+export type NewRecurring = Omit<
+  RecurringItem,
+  "id" | "createdAt" | "lastDay" | "subscription" | "changes" | "pausedFrom" | "pausedUntil"
+> & {
   lastDay?: boolean;
+  subscription?: boolean;
 };
 
 /** `null` removes an optional value. Changes apply to future occurrences only. */
@@ -154,3 +176,63 @@ export interface MarkPaidOptions {
 }
 
 export const occurrenceId = (itemId: string, due: string) => `occ-${itemId}-${due}`;
+
+/** What an occurrence due on `date` is expected to cost: the latest price in force that day. */
+export function priceOn(item: Pick<RecurringItem, "amount" | "changes">, date: string): number {
+  let amount = item.amount;
+  for (const change of item.changes) if (change.effective <= date) amount = change.amount;
+  return amount;
+}
+
+/** Whether nothing is due on `date` because the item is paused. */
+export const isPausedOn = (
+  item: Pick<RecurringItem, "pausedFrom" | "pausedUntil">,
+  date: string,
+): boolean =>
+  item.pausedFrom !== undefined &&
+  item.pausedFrom <= date &&
+  (item.pausedUntil === undefined || date < item.pausedUntil);
+
+/** The last due date of an item that ends, or `undefined` for one that goes on for ever. */
+export function lastDue(schedule: Schedule): string | undefined {
+  if (schedule.endDate === undefined && schedule.endCount === undefined) return undefined;
+  return dueDates(schedule, schedule.start, schedule.endDate ?? "9999-12-31").at(-1);
+}
+
+/** What one payment costs per month, rounded to a minor unit: weekly and daily go by the year. */
+export function monthlyEquivalent(amount: number, every: number, unit: RecurringUnit): number {
+  // Exact integer maths: amount × payments per year ÷ 12, with payments per year as a fraction.
+  const [numerator, denominator] =
+    unit === "day"
+      ? [365n, 12n]
+      : unit === "week"
+        ? [365n, 84n]
+        : unit === "month"
+          ? [12n, 12n]
+          : [1n, 12n];
+  const top = BigInt(amount) * numerator;
+  const bottom = denominator * BigInt(every);
+  return Number((top * 2n + bottom) / (bottom * 2n));
+}
+
+/** A subscription as it stands on a day. */
+export interface SubscriptionEntry {
+  itemId: string;
+  name: string;
+  accountId: string;
+  currency: CurrencyCode;
+  /** The price in force that day, per payment. */
+  price: number;
+  every: number;
+  unit: RecurringUnit;
+  /** `price` as a month: what it adds to the monthly total. */
+  monthly: number;
+  /** Only an active one is in the total. */
+  status: "active" | "paused" | "ended";
+}
+
+export interface SubscriptionSummary {
+  subscriptions: SubscriptionEntry[];
+  /** The monthly total of the active ones, one per currency: nothing is converted here. */
+  monthly: { currency: CurrencyCode; amount: number }[];
+}

@@ -56,6 +56,12 @@ _Avoid_: two linked transactions
 
 **Occurrence**: One due date of a Recurring item: upcoming, due soon, overdue, paid or skipped. Only paid and skipped ones are stored, under an id made from the item and the due date. It counts toward budgets and reports only once a real Transaction or Transfer pays it.
 
+**Subscription**: A Recurring expense flagged as a service the person pays for. Its monthly equivalent adds to a total per currency while it is active (not paused, not ended).
+
+**Price change**: A new amount for a Recurring item from an effective date. Occurrences due earlier keep the price they had, paid or not.
+
+**Expected bill**: An unpaid, unskipped Occurrence of a Recurring expense due in a budget's period. Shown beside a budget, apart from what was spent.
+
 ## Record rules
 
 - IDs are UUIDv7, generated on the device.

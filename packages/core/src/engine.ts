@@ -22,13 +22,20 @@ import {
   dueDates,
   daysBetween,
   occurrenceId,
+  isPausedOn,
+  lastDue,
+  monthlyEquivalent,
   openStatus,
+  priceOn,
   type MarkPaidOptions,
   type NewRecurring,
   type Occurrence,
   type OccurrenceQuery,
   type RecurringItem,
+  type PriceChange,
   type RecurringPatch,
+  type SubscriptionEntry,
+  type SubscriptionSummary,
 } from "./recurring";
 import type { Entity, Op, OpValue } from "./ops";
 import {
@@ -404,6 +411,17 @@ export interface Engine {
   /** The Transactions and Transfers already made stay. */
   deleteRecurring(id: string): Promise<void>;
   listRecurring(): Promise<RecurringItem[]>;
+  /**
+   * Sets the price from `effective` on. Occurrences due earlier keep the price they had, whether
+   * they were paid or not. Not for a transfer, whose two amounts are edited together.
+   */
+  changeRecurringPrice(id: string, amount: number, effective: string): Promise<RecurringItem>;
+  /** Nothing falls due from `from` on, until it is resumed. Leaves paid occurrences alone. */
+  pauseRecurring(id: string, from: string): Promise<RecurringItem>;
+  /** Paying starts again with the first occurrence due on or after `on`. */
+  resumeRecurring(id: string, on: string): Promise<RecurringItem>;
+  /** The subscriptions as of a day, each with its monthly equivalent, and their monthly total. */
+  listSubscriptions(today: string): Promise<SubscriptionSummary>;
   /**
    * Due dates worked out from the templates, each with where it stands. Without `from` only the
    * occurrences nobody acted on come back, overdue ones included: nothing disappears with time.
@@ -1304,6 +1322,15 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
     const endDate = optional("endDate");
     const endCount = number("endCount");
     const toAmount = number("toAmount") || undefined;
+    const pausedFrom = optional("pausedFrom");
+    const pausedUntil = optional("pausedUntil");
+    const changes: PriceChange[] = [...f.entries()]
+      .filter(([name]) => name.startsWith("amount@"))
+      .map(([name, { value }]) => ({
+        effective: name.slice("amount@".length),
+        amount: Number(value),
+      }))
+      .sort((a, b) => (a.effective < b.effective ? -1 : a.effective > b.effective ? 1 : 0));
     return {
       id,
       name: text(f, "name")!,
@@ -1312,7 +1339,11 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
       ...(optional("toAccountId") ? { toAccountId: optional("toAccountId")! } : {}),
       ...(optional("categoryId") ? { categoryId: optional("categoryId")! } : {}),
       amount: number("amount")!,
+      changes,
       ...(toAmount !== undefined ? { toAmount } : {}),
+      subscription: number("subscription") === 1,
+      ...(pausedFrom !== undefined ? { pausedFrom } : {}),
+      ...(pausedUntil !== undefined ? { pausedUntil } : {}),
       every: number("every")!,
       unit: text(f, "unit") as RecurringItem["unit"],
       start: text(f, "start")!,
@@ -1346,6 +1377,8 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
       if (categoryKind(next.categoryId) !== next.kind)
         throw new Error(`The Category must be an ${next.kind} Category`);
     }
+    if (next.subscription && next.kind !== "expense")
+      throw new Error("Only an expense can be a subscription");
     for (const amount of [next.amount, next.toAmount]) {
       if (amount === undefined) continue;
       assertAmount(amount);
@@ -1377,20 +1410,27 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
       unit: item.unit,
       start: item.start,
       lastDay: item.lastDay === undefined ? undefined : item.lastDay ? 1 : 0,
+      subscription: item.subscription === undefined ? undefined : item.subscription ? 1 : 0,
       endDate: item.endDate,
       endCount: item.endCount,
     };
   }
 
+  /** The due dates in a range that are not paused out of the way. */
+  function scheduled(item: RecurringItem, from: string, to: string): string[] {
+    return dueDates(item, from, to).filter((due) => !isPausedOn(item, due));
+  }
+
   function assertScheduled(item: RecurringItem, due: string) {
     assertDate(due);
-    if (dueDates(item, due, due).length === 0) throw new Error(`${item.name} is not due on ${due}`);
+    if (scheduled(item, due, due).length === 0)
+      throw new Error(`${item.name} is not due on ${due}`);
   }
 
   /** What became of an occurrence: paid (with what pays it), skipped, or still to act on. */
   function resolution(item: RecurringItem, due: string) {
     const f = occurrences.get(occurrenceId(item.id, due));
-    const expected = f?.has("expected") ? Number(f.get("expected")!.value) : item.amount;
+    const expected = f?.has("expected") ? Number(f.get("expected")!.value) : priceOn(item, due);
     const status = f && text(f, "status");
     if (status === "skipped") return { state: "skipped" as const, expected };
     if (status === "paid") {
@@ -1461,9 +1501,29 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
       throw new Error(`${item.name} on ${due} was skipped: reopen it first`);
   }
 
+  /** Expense occurrences in a range that nobody has paid or skipped, to set against budgets. */
+  function unpaidBills(range: Period) {
+    const base = readSettings().baseCurrency;
+    const bills: { categoryId: string; amount: number; foreign: boolean }[] = [];
+    for (const id of [...recurringItems.keys()].sort(creationOrder(recurringItems))) {
+      if (liveItem(id) === undefined) continue;
+      const item = readItem(id);
+      if (item.kind !== "expense") continue;
+      const foreign = readAccount(item.accountId).currency !== base;
+      for (const due of scheduled(item, range.from, range.to))
+        if (resolution(item, due).state === "open")
+          bills.push({
+            categoryId: resolveCategory(item.categoryId!),
+            amount: priceOn(item, due),
+            foreign,
+          });
+    }
+    return bills;
+  }
+
   /** Occurrences of an item before a date that nobody has acted on. */
   function openBefore(item: RecurringItem, before: string): string[] {
-    return dueDates(item, item.start, before).filter(
+    return scheduled(item, item.start, before).filter(
       (due) => due < before && resolution(item, due).state === "open",
     );
   }
@@ -1860,6 +1920,8 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
       const { budgetStartDay: startDay = 1, budgetNearLimit: near = DEFAULT_NEAR_LIMIT } =
         readSettings();
       const base = reportInput({ from: on, to: on, kind: "expense" });
+      const parents = effectiveParents();
+      const billsByPeriod = new Map<string, ReturnType<typeof unpaidBills>>();
       const byPeriod = new Map<string, { each: Map<string, number>; all: number }>();
       const spentIn = (budget: StoredBudget, range: Period): number => {
         const key = `${range.from}/${range.to}`;
@@ -1887,6 +1949,15 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
         const amount = amountIn(budget, range.from);
         const limit = amount + carryIn;
         const spent = spentIn(budget, range);
+        const key = `${range.from}/${range.to}`;
+        if (!billsByPeriod.has(key)) billsByPeriod.set(key, unpaidBills(range));
+        const bills = billsByPeriod
+          .get(key)!
+          .filter(
+            (bill) =>
+              budget.categoryId === undefined ||
+              isInside(bill.categoryId, budget.categoryId, parents),
+          );
         return {
           range,
           amount,
@@ -1896,6 +1967,8 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
           remaining: limit - spent,
           used: budgetUsed(spent, limit),
           state: budgetStateOf(spent, limit, near),
+          expected: bills.filter((b) => !b.foreign).reduce((sum, b) => sum + b.amount, 0),
+          expectedSkipped: bills.filter((b) => b.foreign).length,
         };
       };
       const progress: BudgetProgress[] = categoryBudgets.map((budget) => ({
@@ -1906,7 +1979,6 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
         ...standing(budget),
       }));
       if (overallBudget === undefined) return { categories: progress };
-      const parents = effectiveParents();
       const overall = standing(overallBudget);
       const allocated = categoryBudgets
         .filter((b) => b.period === overallBudget.period)
@@ -1931,7 +2003,7 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
       return { categories: progress, overall: standingOverall };
     },
     async createRecurring(input) {
-      const item = { lastDay: false, ...input };
+      const item = { lastDay: false, subscription: false, ...input };
       checkItem(item);
       const id = newUuidV7(clock, random);
       await commit(
@@ -1974,6 +2046,77 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
       );
       return readItem(id);
     },
+    async changeRecurringPrice(id, amount, effective) {
+      const item = assertItem(id);
+      if (item.kind === "transfer")
+        throw new Error("A transfer's amounts are changed by editing the recurring item");
+      assertAmount(amount);
+      if (amount <= 0) throw new Error("The amount must be above zero");
+      assertDate(effective);
+      await commit(opsFor("recurring", id, { [`amount@${effective}`]: amount }));
+      return readItem(id);
+    },
+    async pauseRecurring(id, from) {
+      const item = assertItem(id);
+      assertDate(from);
+      // What an earlier pause hid would come back if its window were forgotten: skip it instead.
+      const forgotten =
+        item.pausedFrom !== undefined && item.pausedUntil !== undefined
+          ? dueDates(item, item.pausedFrom, item.pausedUntil)
+          : [];
+      await commit([
+        ...forgotten
+          .filter((due) => due < item.pausedUntil! && resolution(item, due).state === "open")
+          .flatMap((due) => resolveOps(item, due, { status: "skipped" })),
+        ...opsFor("recurring", id, { pausedFrom: from, pausedUntil: "" }),
+      ]);
+      return readItem(id);
+    },
+    async resumeRecurring(id, on) {
+      const item = assertItem(id);
+      assertDate(on);
+      if (item.pausedFrom === undefined || item.pausedUntil !== undefined)
+        throw new Error(`${item.name} is not paused`);
+      if (on < item.pausedFrom) throw new Error("It cannot resume before it was paused");
+      await commit(opsFor("recurring", id, { pausedUntil: on }));
+      return readItem(id);
+    },
+    async listSubscriptions(today) {
+      assertDate(today);
+      const entries: SubscriptionEntry[] = [];
+      const totals = new Map<CurrencyCode, number>();
+      for (const id of [...recurringItems.keys()].sort(creationOrder(recurringItems))) {
+        if (liveItem(id) === undefined) continue;
+        const item = readItem(id);
+        if (!item.subscription) continue;
+        const { currency } = readAccount(item.accountId);
+        const price = priceOn(item, today);
+        const monthly = monthlyEquivalent(price, item.every, item.unit);
+        const ends = lastDue(item);
+        const status =
+          ends !== undefined && ends < today
+            ? ("ended" as const)
+            : isPausedOn(item, today)
+              ? ("paused" as const)
+              : ("active" as const);
+        entries.push({
+          itemId: id,
+          name: item.name,
+          accountId: item.accountId,
+          currency,
+          price,
+          every: item.every,
+          unit: item.unit,
+          monthly,
+          status,
+        });
+        if (status === "active") totals.set(currency, (totals.get(currency) ?? 0) + monthly);
+      }
+      return {
+        subscriptions: entries,
+        monthly: [...totals].map(([currency, amount]) => ({ currency, amount })),
+      };
+    },
     async deleteRecurring(id) {
       assertItem(id);
       await commit(opsFor("recurring", id, { deletedAt: clock.now() }));
@@ -1991,7 +2134,7 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
       for (const id of [...recurringItems.keys()].sort(creationOrder(recurringItems))) {
         if (liveItem(id) === undefined) continue;
         const item = readItem(id);
-        const due = new Set(dueDates(item, query.from ?? item.start, query.to));
+        const due = new Set(scheduled(item, query.from ?? item.start, query.to));
         if (query.from !== undefined)
           // A paid or skipped occurrence stays in the history even if the schedule moved away.
           for (const f of occurrences.values())
@@ -2013,7 +2156,7 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
     async markPaid(itemId, due, options = {}) {
       const item = assertItem(itemId);
       assertOpen(item, due);
-      const amount = options.amount ?? item.amount;
+      const amount = options.amount ?? priceOn(item, due);
       const date = options.date ?? due;
       const note = options.note;
       if (item.kind === "transfer") {

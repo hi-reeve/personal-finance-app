@@ -36,6 +36,13 @@ export interface Standing {
   used: number;
   /** `near` from the near-limit setting up to the limit itself; `over` only above it. */
   state: BudgetState;
+  /**
+   * Recurring expenses due in this period that nobody has paid or skipped, in the base currency.
+   * Kept apart from `spent`: they are expected, not spent.
+   */
+  expected: number;
+  /** Expected bills left out of `expected` because their Account is not in the base currency. */
+  expectedSkipped: number;
 }
 
 export interface BudgetProgress extends Budget, Standing {

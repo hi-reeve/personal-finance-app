@@ -314,6 +314,28 @@ describe("linking an existing Transaction", () => {
     expect((await engine.listOccurrences(range))[0]).toMatchObject({ status: "overdue" });
   });
 
+  it("refuses a Transaction of the wrong kind, or one that already pays another occurrence", async () => {
+    const { engine, cash, rent, salary, bill } = await world();
+    const item = await bill({ start: "2026-09-05" });
+    const income = await engine.recordTransaction({
+      accountId: cash.id,
+      date: "2026-09-05",
+      lines: [{ categoryId: salary.id, amount: 850_000 }],
+    });
+    await expect(
+      engine.linkOccurrence(item.id, "2026-09-05", { transactionId: income.id }),
+    ).rejects.toThrow(/does not fit/);
+    const pay = await engine.recordTransaction({
+      accountId: cash.id,
+      date: "2026-09-05",
+      lines: [{ categoryId: rent.id, amount: -850_000 }],
+    });
+    await engine.linkOccurrence(item.id, "2026-09-05", { transactionId: pay.id });
+    await expect(
+      engine.linkOccurrence(item.id, "2026-10-05", { transactionId: pay.id }),
+    ).rejects.toThrow(/does not fit/);
+  });
+
   it("links a Transfer to a transfer item, and refuses one that does not fit", async () => {
     const { engine, cash, bank, rent, bill } = await world();
     const item = await bill({

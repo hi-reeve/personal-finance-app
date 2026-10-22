@@ -2082,14 +2082,16 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
       if ("transferId" in target) {
         assertTransferLive(target.transferId);
         const t = readTransfer(target.transferId);
-        if (item.kind !== "transfer" || t.fromAccountId !== item.accountId)
+        const fits = (await engine.linkCandidates(itemId, due, Number.MAX_SAFE_INTEGER)).transfers;
+        if (!fits.some((candidate) => candidate.id === t.id))
           throw new Error("This Transfer does not fit the recurring item");
         await commit(resolveOps(item, due, { status: "paid", transferId: target.transferId }));
         return;
       }
       assertLive(target.transactionId);
       const tx = readTransaction(target.transactionId)!;
-      if (item.kind === "transfer" || tx.accountId !== item.accountId)
+      const fits = (await engine.linkCandidates(itemId, due, Number.MAX_SAFE_INTEGER)).transactions;
+      if (!fits.some((candidate) => candidate.id === tx.id))
         throw new Error("This Transaction does not fit the recurring item");
       await commit(resolveOps(item, due, { status: "paid", transactionId: target.transactionId }));
     },

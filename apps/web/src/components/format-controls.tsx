@@ -130,3 +130,57 @@ export function BudgetLimitControl() {
     </form>
   );
 }
+
+/** The day a monthly budget period starts, so months line up with payday. Saved on blur. */
+export function BudgetStartDayControl() {
+  const { t } = useLocale();
+  const app = useApp();
+  const saved = app.status === "ready" ? (app.settings.budgetStartDay ?? 1) : 1;
+  const [text, setText] = useState(String(saved));
+  const [problem, setProblem] = useState<string | undefined>(undefined);
+  useEffect(() => setText(String(saved)), [saved]);
+  const valid = /^\d{1,2}$/.test(text.trim()) && Number(text) >= 1 && Number(text) <= 28;
+
+  async function save() {
+    if (!valid || app.status !== "ready" || Number(text) === saved) return;
+    setProblem(undefined);
+    try {
+      await app.act((engine) => engine.setPreferences({ budgetStartDay: Number(text) }));
+    } catch (error) {
+      setText(String(saved));
+      setProblem(
+        t.settings_synced_failed({
+          message: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    }
+  }
+
+  return (
+    <form
+      className="flex flex-col gap-1"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void save();
+      }}
+    >
+      <label className="flex flex-col gap-1">
+        <span>{t.label_start_day()}</span>
+        <input
+          className={`${FIELD} max-w-32`}
+          inputMode="numeric"
+          aria-invalid={!valid}
+          aria-describedby="start-day-help"
+          value={text}
+          onChange={(event) => setText(event.target.value)}
+          onBlur={() => void save()}
+        />
+      </label>
+      <p className="text-sm text-ink-muted">{t.start_day_help()}</p>
+      <p id="start-day-help" role="alert" className="min-h-5 text-sm text-danger">
+        {valid ? "" : t.start_day_invalid()}
+        {problem}
+      </p>
+    </form>
+  );
+}

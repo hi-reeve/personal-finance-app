@@ -1,4 +1,17 @@
-import { addDays, addMonths, endOfMonth, format, parse, startOfMonth } from "date-fns";
+import {
+  addDays,
+  addMonths,
+  endOfMonth,
+  endOfYear,
+  format,
+  getDate,
+  parse,
+  setDate,
+  startOfMonth,
+  startOfWeek,
+  startOfYear,
+  subMonths,
+} from "date-fns";
 import { assertDate } from "./validate";
 
 /** Two plain dates `YYYY-MM-DD`, both included. */
@@ -20,6 +33,30 @@ export function monthOf(date: string): Period {
   const day = read(date);
   return { from: format(startOfMonth(day), DAY), to: format(endOfMonth(day), DAY) };
 }
+
+/**
+ * The budget period around `date`. A month runs from `startDay` (1 to 28, so every month has it) to
+ * the day before the next one; a week runs Monday to Sunday; a year is the calendar year.
+ */
+export function budgetPeriodOf(
+  date: string,
+  kind: "month" | "week" | "year",
+  startDay = 1,
+): Period {
+  const day = read(date);
+  if (kind === "week") {
+    const from = startOfWeek(day, { weekStartsOn: 1 });
+    return { from: format(from, DAY), to: format(addDays(from, 6), DAY) };
+  }
+  if (kind === "year")
+    return { from: format(startOfYear(day), DAY), to: format(endOfYear(day), DAY) };
+  const month = getDate(day) >= startDay ? startOfMonth(day) : startOfMonth(subMonths(day, 1));
+  const from = setDate(month, startDay);
+  return { from: format(from, DAY), to: format(addDays(addMonths(from, 1), -1), DAY) };
+}
+
+/** The day after a plain date. */
+export const dayAfter = (date: string): string => format(addDays(read(date), 1), DAY);
 
 /** The month `months` away from a month Period (negative goes back). */
 export function shiftMonth(period: Period, months: number): Period {

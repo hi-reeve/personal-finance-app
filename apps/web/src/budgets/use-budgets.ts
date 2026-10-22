@@ -1,21 +1,21 @@
-import type { BudgetProgress, Period } from "@pfa/core";
+import type { BudgetStanding } from "@pfa/core";
 import { useEffect, useState } from "react";
 import type { ReadyState } from "../app/app-provider";
 
 export type BudgetsState =
   | { status: "loading" }
   | { status: "error"; message: string }
-  | { status: "ready"; period: Period; progress: BudgetProgress[] };
+  | { status: "ready"; on: string; standing: BudgetStanding };
 
-/** How every budget stands over a month, asked again whenever the month or the data changes. */
-export function useBudgetProgress(app: ReadyState, period: Period): BudgetsState {
+/** How every budget stands in the period around a day, asked again whenever the day or the data changes. */
+export function useBudgetProgress(app: ReadyState, on: string): BudgetsState {
   const [state, setState] = useState<BudgetsState>({ status: "loading" });
   const { read, version } = app;
 
   useEffect(() => {
     let live = true;
-    read((engine) => engine.budgetProgress(period)).then(
-      (progress) => live && setState({ status: "ready", period, progress }),
+    read((engine) => engine.budgetProgress(on)).then(
+      (standing) => live && setState({ status: "ready", on, standing }),
       (error: unknown) =>
         live &&
         setState({
@@ -26,10 +26,8 @@ export function useBudgetProgress(app: ReadyState, period: Period): BudgetsState
     return () => {
       live = false;
     };
-  }, [read, version, period.from, period.to]);
+  }, [read, version, on]);
 
-  // Figures for another month are never shown under this month's name.
-  return state.status === "ready" && state.period.from !== period.from
-    ? { status: "loading" }
-    : state;
+  // Figures for another day are never shown under this day's name.
+  return state.status === "ready" && state.on !== on ? { status: "loading" } : state;
 }

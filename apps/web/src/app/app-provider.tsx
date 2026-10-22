@@ -6,6 +6,7 @@ import {
   type CurrencyCode,
   type Engine,
   type NewAccount,
+  type OverallBudget,
   type Settings,
   type Tag,
   type Transaction,
@@ -13,6 +14,7 @@ import {
 } from "@pfa/core";
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { openWebStore } from "../storage/web-store";
+import { today } from "./today";
 
 const DEVICE_KEY = "pfa.device-id";
 
@@ -53,8 +55,12 @@ export interface AccountView extends Account {
 export interface Snapshot {
   settings: Settings;
   accounts: AccountView[];
-  /** Monthly budgets, one per expense Category. */
+  /** Budgets, one per expense Category. */
   budgets: Budget[];
+  /** The budget over all spending, when there is one. */
+  overallBudget?: OverallBudget;
+  /** How many budgets are over their limit in their current period, for the Plan badge. */
+  budgetsOver: number;
   /** Live Transfers, newest first. */
   transfers: Transfer[];
   /** Live Transactions, newest first; a Transfer's fee is among them. */
@@ -115,6 +121,10 @@ async function snapshot(engine: Engine): Promise<Snapshot> {
     engine.recentCategories(5),
     engine.listTags(),
   ]);
+  const [overallBudget, standing] = await Promise.all([
+    engine.getOverallBudget(),
+    engine.budgetProgress(today()),
+  ]);
   return {
     settings: engine.getSettings(),
     accounts,
@@ -123,6 +133,10 @@ async function snapshot(engine: Engine): Promise<Snapshot> {
     categories,
     categoryUse,
     budgets: await engine.listBudgets(),
+    ...(overallBudget ? { overallBudget } : {}),
+    budgetsOver: [...standing.categories, ...(standing.overall ? [standing.overall] : [])].filter(
+      (b) => b.state === "over",
+    ).length,
     recentCategories,
     tags,
   };

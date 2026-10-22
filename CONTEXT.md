@@ -38,7 +38,7 @@ _Avoid_: two linked transactions
 
 **At today's rate**: A report mode that reconverts foreign-currency Lines at today's rate instead of the rate frozen with their Transaction. Base-currency Lines never change. A currency with no rate is left out and named, never guessed.
 
-**Display currency**: A second currency, chosen per device, that Home also shows its totals in at today's rate. A display choice only; never changes stored data.
+**Display currency**: The currency a report is shown in. A display choice only; never changes stored data. Chosen per device. Home shows its totals in it as a labelled view at today's rate, beside the base-currency figures.
 
 **Original amount**: Optional display-only amount and currency recorded on a Transaction (for example USD 12 paid on an IDR card). Reports never use it.
 

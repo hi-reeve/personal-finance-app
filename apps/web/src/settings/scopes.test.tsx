@@ -30,6 +30,7 @@ describe("synced settings", () => {
       numberFormat: "dot-comma",
       dateFormat: "iso",
       budgetNearLimit: 85,
+      budgetStartDay: 25,
     });
     const logged = (await engine.exportOps()).map((op) => op.field).sort();
     expect(logged).toEqual([...synced].sort());

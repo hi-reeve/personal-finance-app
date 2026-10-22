@@ -1,5 +1,6 @@
 import { Link, useRouter } from "@tanstack/react-router";
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useApp } from "../app/app-provider";
 import { useLocale } from "./locale";
 import { TransactionDialog } from "./transaction-dialog";
 import {
@@ -59,6 +60,9 @@ function NavLink({
   iconSize?: number;
 }) {
   const { t } = useLocale();
+  const app = useApp();
+  // A budget that is over shows on Plan, so it is seen without opening the screen.
+  const over = app.status === "ready" ? app.budgetsOver : 0;
   const ref = useRef<HTMLAnchorElement>(null);
   const current = isCurrent(destination, pathname);
   // Set on the element directly: the router decides `aria-current` from its own location, which is
@@ -71,6 +75,12 @@ function NavLink({
     <Link ref={ref} to={destination.to} className={`${className} ${CURRENT} ${FOCUS}`}>
       <Icon name={destination.icon} size={iconSize} />
       <span>{t[destination.label]()}</span>
+      {(destination.label === "nav_plan" || destination.label === "nav_budgets") && over > 0 && (
+        <span className="rounded-md bg-danger px-1.5 text-[0.7rem] leading-4 text-on-danger">
+          <span aria-hidden="true">{over}</span>
+          <span className="sr-only">{t.plan_over_badge({ count: over })}</span>
+        </span>
+      )}
     </Link>
   );
 }

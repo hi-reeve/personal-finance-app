@@ -7,6 +7,7 @@ import { SyncedPreferences } from "../app/synced-preferences";
 import { AppGate } from "../app/app-gate";
 import { AppProvider } from "../app/app-provider";
 import { LocalOnlyBanner } from "../app/local-only-banner";
+import { BudgetNotices } from "../budgets/budget-notices";
 import { AppShell } from "../components/app-shell";
 import { HideAmountsProvider } from "../components/hide-amounts";
 import { LocaleProvider } from "../components/locale";
@@ -58,10 +59,12 @@ function Root() {
             <SyncedPreferences />
             <ActivityFilterProvider>
               <AppGate>
-                <AppShell>
-                  <LocalOnlyBanner />
-                  <Outlet />
-                </AppShell>
+                <BudgetNotices>
+                  <AppShell>
+                    <LocalOnlyBanner />
+                    <Outlet />
+                  </AppShell>
+                </BudgetNotices>
               </AppGate>
             </ActivityFilterProvider>
           </AppProvider>

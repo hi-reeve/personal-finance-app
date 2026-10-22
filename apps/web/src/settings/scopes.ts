@@ -11,6 +11,7 @@ const SYNCED = {
   numberFormat: "synced",
   dateFormat: "synced",
   budgetNearLimit: "synced",
+  budgetStartDay: "synced",
 } as const satisfies Record<keyof Preferences, "synced">;
 
 const DEVICE = {

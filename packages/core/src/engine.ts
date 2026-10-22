@@ -1,6 +1,20 @@
 import type { Clock, OpStore, Random } from "./adapters";
 import { compareHlc, type Hlc } from "./hlc";
 import { newUuidV7 } from "./ids";
+import {
+  BUDGET_PERIODS,
+  budgetStateOf,
+  budgetUsed,
+  DEFAULT_NEAR_LIMIT,
+  type Budget,
+  type BudgetPeriod,
+  type BudgetProgress,
+  type BudgetStanding,
+  type OverallBudget,
+  type OverallBudgetProgress,
+  type Standing,
+} from "./budgets";
+import { budgetPeriodOf, dayAfter, type Period } from "./periods";
 import type { Entity, Op, OpValue } from "./ops";
 import {
   currencyCodes,
@@ -88,29 +102,12 @@ export interface TransferFee {
   rate?: string;
 }
 
-/** A monthly limit on an expense Category, counting everything inside it. Base currency. */
-export interface Budget {
-  categoryId: string;
-  /** Whole minor units of the base currency, above zero. */
-  amount: number;
+export interface BudgetOptions {
+  period?: BudgetPeriod;
+  carryOver?: boolean;
+  /** The day the change is made, `YYYY-MM-DD`. Absent means the clock's day (UTC). */
+  today?: string;
 }
-
-export type BudgetState = "on-track" | "near" | "over";
-
-export interface BudgetProgress extends Budget {
-  name: string;
-  /** What the Category and everything inside it spent in the period, net of refunds. */
-  spent: number;
-  /** The amount left; negative when over. */
-  remaining: number;
-  /** `spent` of `amount` in basis points (10,000 is 100%), never below zero. */
-  used: number;
-  /** `near` from the near-limit setting up to the amount itself; `over` only above it. */
-  state: BudgetState;
-}
-
-/** Where a budget turns to "near" when the setting is not chosen. */
-export const DEFAULT_NEAR_LIMIT = 80;
 
 /** Money moved between two of the user's own Accounts. Not income or expense. */
 export interface Transfer {
@@ -211,6 +208,8 @@ export interface Settings {
   dateFormat?: DateFormat;
   /** Percent of a budget at which it counts as near its limit. Absent means the default, 80. */
   budgetNearLimit?: number;
+  /** The day a monthly budget period starts, 1 to 28. Absent means the 1st. */
+  budgetStartDay?: number;
 }
 
 /** The synced preferences. Theme, accent, language and hide-amounts are per device and not here. */
@@ -219,6 +218,8 @@ export interface Preferences {
   dateFormat: DateFormat;
   /** A whole percent from 1 to 99. */
   budgetNearLimit: number;
+  /** The day a monthly budget period starts, a whole number from 1 to 28. */
+  budgetStartDay: number;
 }
 
 export interface NewLine {
@@ -362,13 +363,25 @@ export interface Engine {
   spendingByCategory(query: SpendingQuery): Promise<SpendingByCategory>;
   /** The same counting rules, day by day over the period. */
   dailyTotals(query: SpendingQuery): Promise<DailyTotals>;
-  /** Sets the monthly budget on an expense Category, or changes it. One per Category. */
-  setBudget(categoryId: string, amount: number): Promise<Budget>;
+  /**
+   * Sets the budget on an expense Category, or changes it. One per Category. A new budget is monthly
+   * with no carry-over unless told otherwise; changing one keeps what is not named. A change of
+   * amount applies from the period of `today` onward, so past periods keep the amount they had.
+   * A budget must use the same period as the budgets above and inside its Category.
+   */
+  setBudget(categoryId: string, amount: number, options?: BudgetOptions): Promise<Budget>;
   removeBudget(categoryId: string): Promise<void>;
-  /** Budgets whose Category still exists, following merges. */
+  /** The optional budget over all spending, whatever the Category budgets add up to. */
+  setOverallBudget(amount: number, options?: BudgetOptions): Promise<OverallBudget>;
+  removeOverallBudget(): Promise<void>;
+  getOverallBudget(): Promise<OverallBudget | undefined>;
+  /** Category budgets whose Category still exists, following merges. */
   listBudgets(): Promise<Budget[]>;
-  /** How each budget stands over a period. A Transaction is never blocked by any of this. */
-  budgetProgress(period: { from: string; to: string }): Promise<BudgetProgress[]>;
+  /**
+   * How each budget stands in the period that contains `on`. Carry-over is worked out from past
+   * Transactions each time. A Transaction is never blocked by any of this.
+   */
+  budgetProgress(on: string): Promise<BudgetStanding>;
   /** Income and spending per calendar month across a range, for trends. */
   monthlyTotals(query: { from: string; to: string }): Promise<MonthlyTotals>;
   /** Live Transactions, oldest date first. A Transfer's fee is included; the Transfer is not. */
@@ -394,6 +407,7 @@ const TRANSFER_FIELDS = [
   "toAmount",
 ] as const;
 const SETTINGS_ID = "settings";
+const isStartDay = (value: number) => Number.isInteger(value) && value >= 1 && value <= 28;
 const isNearLimit = (value: number) => Number.isInteger(value) && value >= 1 && value <= 99;
 const NUMBER_FORMATS: readonly NumberFormat[] = ["dot-comma", "comma-dot"];
 
@@ -660,6 +674,11 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
     const storedNear = f.get("budgetNearLimit")?.value;
     const budgetNearLimit =
       storedNear !== undefined && isNearLimit(Number(storedNear)) ? Number(storedNear) : undefined;
+    const storedStart = f.get("budgetStartDay")?.value;
+    const budgetStartDay =
+      storedStart !== undefined && isStartDay(Number(storedStart))
+        ? Number(storedStart)
+        : undefined;
     return {
       ...(baseCurrency !== undefined ? { baseCurrency } : {}),
       ...(setupAt !== undefined ? { setupAt: Number(setupAt) } : {}),
@@ -667,6 +686,7 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
       ...(numberFormat ? { numberFormat } : {}),
       ...(dateFormat ? { dateFormat } : {}),
       ...(budgetNearLimit !== undefined ? { budgetNearLimit } : {}),
+      ...(budgetStartDay !== undefined ? { budgetStartDay } : {}),
     };
   }
 
@@ -1016,27 +1036,149 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
     >;
   }
 
+  /** What a budget record holds: its settings and every amount it has had. */
+  interface StoredBudget {
+    /** Absent for the overall budget. */
+    categoryId?: string;
+    period: BudgetPeriod;
+    carryOver: boolean;
+    /** The day it was set, where carry-over starts. */
+    since: string;
+    /** The amount before any recorded change. */
+    base: number;
+    /** Amounts from the first day of a period onward, oldest first. */
+    changes: { from: string; amount: number }[];
+  }
+
+  const OVERALL_ID = "budget-overall";
+
+  const isLiveBudget = (f: Fields | undefined): f is Fields =>
+    f !== undefined && Number(f.get("deletedAt")?.value ?? 0) <= 0 && f.has("amount");
+
+  function readStored(f: Fields, categoryId?: string): StoredBudget {
+    const period = text(f, "period") as BudgetPeriod | undefined;
+    const changes = [...f.entries()]
+      .filter(([name]) => name.startsWith("amount@"))
+      .map(([name, { value }]) => ({ from: name.slice("amount@".length), amount: Number(value) }))
+      .sort((x, y) => (x.from < y.from ? -1 : x.from > y.from ? 1 : 0));
+    return {
+      ...(categoryId !== undefined ? { categoryId } : {}),
+      period: period !== undefined && BUDGET_PERIODS.includes(period) ? period : "month",
+      carryOver: Number(f.get("carryOver")?.value ?? 0) === 1,
+      since: text(f, "since") ?? "1970-01-01",
+      base: Number(f.get("amount")!.value),
+      changes,
+    };
+  }
+
+  /** The amount in force in the period starting on `from`. */
+  function amountIn(budget: StoredBudget, from: string): number {
+    let amount = budget.base;
+    for (const change of budget.changes) if (change.from <= from) amount = change.amount;
+    return amount;
+  }
+
+  const latestAmount = (budget: StoredBudget) =>
+    budget.changes.length > 0 ? budget.changes[budget.changes.length - 1]!.amount : budget.base;
+
   /** Live budgets on live expense Categories, following merges; the newest wins if two merge into one. */
-  function currentBudgets(): Budget[] {
-    const byCategory = new Map<string, { budget: Budget; edited: Hlc }>();
-    for (const f of budgets.values()) {
+  function storedCategoryBudgets(): StoredBudget[] {
+    const byCategory = new Map<string, { budget: StoredBudget; edited: Hlc }>();
+    for (const [id, f] of budgets) {
       // A tombstone can arrive before the budget it removes; only a complete record counts.
-      if (Number(f.get("deletedAt")?.value ?? 0) > 0 || !f.has("amount") || !f.has("categoryId"))
-        continue;
+      if (id === OVERALL_ID || !isLiveBudget(f) || !f.has("categoryId")) continue;
       const target = resolveCategory(text(f, "categoryId")!);
       if (!isLiveCategory(target) || categoryKind(target) !== "expense") continue;
       const edited = lastEdited(f);
       const current = byCategory.get(target);
       if (current === undefined || compareHlc(edited, current.edited) > 0)
-        byCategory.set(target, {
-          budget: { categoryId: target, amount: Number(f.get("amount")!.value) },
-          edited,
-        });
+        byCategory.set(target, { budget: readStored(f, target), edited });
     }
     const order = new Map(allCategories().map((c, index) => [c.id, index]));
     return [...byCategory.values()]
       .map((entry) => entry.budget)
-      .sort((a, b) => (order.get(a.categoryId) ?? 0) - (order.get(b.categoryId) ?? 0));
+      .sort((a, b) => (order.get(a.categoryId!) ?? 0) - (order.get(b.categoryId!) ?? 0));
+  }
+
+  function storedOverallBudget(): StoredBudget | undefined {
+    const f = budgets.get(OVERALL_ID);
+    return isLiveBudget(f) ? readStored(f) : undefined;
+  }
+
+  const asBudget = (b: StoredBudget): Budget => ({
+    categoryId: b.categoryId!,
+    amount: latestAmount(b),
+    period: b.period,
+    carryOver: b.carryOver,
+  });
+
+  const asOverall = (b: StoredBudget): OverallBudget => ({
+    amount: latestAmount(b),
+    period: b.period,
+    carryOver: b.carryOver,
+  });
+
+  function currentBudgets(): Budget[] {
+    return storedCategoryBudgets().map(asBudget);
+  }
+
+  const budgetToday = (today: string | undefined): string => {
+    if (today !== undefined) {
+      assertDate(today);
+      return today;
+    }
+    return new Date(clock.now()).toISOString().slice(0, 10);
+  };
+
+  function assertBudgetAmount(amount: number) {
+    assertAmount(amount);
+    if (amount <= 0) throw new Error("A budget must be above zero");
+  }
+
+  function assertBudgetPeriod(period: BudgetPeriod) {
+    if (!BUDGET_PERIODS.includes(period)) throw new Error(`Invalid budget period "${period}"`);
+  }
+
+  /** A budget, the budgets above it and the budgets inside it all count in the same periods. */
+  function assertSamePeriod(categoryId: string, period: BudgetPeriod) {
+    const parents = effectiveParents();
+    for (const other of storedCategoryBudgets()) {
+      if (other.categoryId === categoryId || other.period === period) continue;
+      if (
+        isInside(other.categoryId!, categoryId, parents) ||
+        isInside(categoryId, other.categoryId!, parents)
+      )
+        throw new Error(
+          "A budget must use the same period as the budgets above and inside its Category",
+        );
+    }
+  }
+
+  /** Writes a budget: a new one records where it started, a change records its amount from this period. */
+  function budgetOps(
+    id: string,
+    extra: Record<string, OpValue>,
+    live: StoredBudget | undefined,
+    amount: number,
+    options: BudgetOptions,
+  ): Op[] {
+    const today = budgetToday(options.today);
+    const period = options.period ?? live?.period ?? "month";
+    const carryOver = options.carryOver ?? live?.carryOver ?? false;
+    const from = budgetPeriodOf(today, period, readSettings().budgetStartDay ?? 1).from;
+    return opsFor("budget", id, {
+      ...extra,
+      period,
+      carryOver: carryOver ? 1 : 0,
+      deletedAt: 0,
+      ...(live === undefined ? { amount, since: today } : {}),
+      [`amount@${from}`]: amount,
+    });
+  }
+
+  function liveRecord(id: string): Fields | undefined {
+    const f = budgets.get(id);
+    return isLiveBudget(f) ? f : undefined;
   }
 
   function reportInput(query: SpendingQuery): SpendingInput {
@@ -1152,6 +1294,8 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
         throw new Error(`Invalid date format "${patch.dateFormat}"`);
       if (patch.budgetNearLimit !== undefined && !isNearLimit(patch.budgetNearLimit))
         throw new Error(`The near-limit setting must be a whole percent from 1 to 99`);
+      if (patch.budgetStartDay !== undefined && !isStartDay(patch.budgetStartDay))
+        throw new Error(`The budget start day must be a whole number from 1 to 28`);
       // Only what is named is written; an explicit `undefined` is not a change.
       const named = Object.fromEntries(
         Object.entries(patch).filter(([, value]) => value !== undefined),
@@ -1430,51 +1574,120 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
     spendingByCategory: async (query) => spendingByCategory(reportInput(query)),
     dailyTotals: async (query) => dailyTotals(reportInput(query)),
     monthlyTotals: async (query) => monthlyTotals(reportInput(query)),
-    async setBudget(categoryId, amount) {
+    async setBudget(categoryId, amount, options = {}) {
       assertCategory(categoryId);
       if (categoryKind(categoryId) !== "expense")
         throw new Error("A budget goes on an expense Category");
-      assertAmount(amount);
-      if (amount <= 0) throw new Error("A budget must be above zero");
+      assertBudgetAmount(amount);
+      const id = `budget-${categoryId}`;
+      const f = liveRecord(id);
+      const live = f && readStored(f, categoryId);
+      const period = options.period ?? live?.period ?? "month";
+      assertBudgetPeriod(period);
+      assertSamePeriod(categoryId, period);
       // One record per Category, so two devices setting the same budget write to the same fields.
-      await commit(opsFor("budget", `budget-${categoryId}`, { categoryId, amount, deletedAt: 0 }));
-      return { categoryId, amount };
+      await commit(budgetOps(id, { categoryId }, live, amount, options));
+      return asBudget(readStored(budgets.get(id)!, categoryId));
     },
     async removeBudget(categoryId) {
       const id = `budget-${categoryId}`;
-      const f = budgets.get(id);
-      if (f === undefined || Number(f.get("deletedAt")?.value ?? 0) > 0)
+      if (liveRecord(id) === undefined)
         throw new Error(`There is no budget on Category ${categoryId}`);
       await commit(opsFor("budget", id, { deletedAt: clock.now() }));
     },
+    async setOverallBudget(amount, options = {}) {
+      assertBudgetAmount(amount);
+      if (options.period !== undefined) assertBudgetPeriod(options.period);
+      const f = liveRecord(OVERALL_ID);
+      await commit(budgetOps(OVERALL_ID, {}, f && readStored(f), amount, options));
+      return asOverall(readStored(budgets.get(OVERALL_ID)!));
+    },
+    async removeOverallBudget() {
+      if (liveRecord(OVERALL_ID) === undefined) throw new Error("There is no overall budget");
+      await commit(opsFor("budget", OVERALL_ID, { deletedAt: clock.now() }));
+    },
+    getOverallBudget: async () => {
+      const stored = storedOverallBudget();
+      return stored && asOverall(stored);
+    },
     listBudgets: async () => currentBudgets(),
-    async budgetProgress(period) {
-      const found = currentBudgets();
-      if (found.length === 0) return [];
-      const totals = categoryTotals(reportInput({ ...period, kind: "expense" }));
-      const near = readSettings().budgetNearLimit ?? DEFAULT_NEAR_LIMIT;
-      return found.map(({ categoryId, amount }) => {
-        const spent = totals.get(categoryId) ?? 0;
-        const used = Number(
-          (BigInt(Math.max(spent, 0)) * 10_000n + BigInt(amount) / 2n) / BigInt(amount),
-        );
-        // Compared on the exact amounts, so a rounded percentage never changes the state.
-        const state: BudgetState =
-          spent > amount
-            ? "over"
-            : BigInt(spent) * 100n >= BigInt(amount) * BigInt(near)
-              ? "near"
-              : "on-track";
+    async budgetProgress(on) {
+      assertDate(on);
+      const categoryBudgets = storedCategoryBudgets();
+      const overallBudget = storedOverallBudget();
+      if (categoryBudgets.length === 0 && overallBudget === undefined) return { categories: [] };
+      const { budgetStartDay: startDay = 1, budgetNearLimit: near = DEFAULT_NEAR_LIMIT } =
+        readSettings();
+      const base = reportInput({ from: on, to: on, kind: "expense" });
+      const byPeriod = new Map<string, { each: Map<string, number>; all: number }>();
+      const spentIn = (budget: StoredBudget, range: Period): number => {
+        const key = `${range.from}/${range.to}`;
+        let totals = byPeriod.get(key);
+        if (totals === undefined) {
+          const input = { ...base, ...range };
+          totals = { each: categoryTotals(input), all: spendingByCategory(input).total };
+          byPeriod.set(key, totals);
+        }
+        return budget.categoryId === undefined
+          ? totals.all
+          : (totals.each.get(budget.categoryId) ?? 0);
+      };
+      const standing = (budget: StoredBudget): Standing => {
+        const range = budgetPeriodOf(on, budget.period, startDay);
+        // What earlier periods left, from the one the budget started in. Worked out, not stored.
+        let carryIn = 0;
+        if (budget.carryOver) {
+          let past = budgetPeriodOf(budget.since, budget.period, startDay);
+          while (past.from < range.from) {
+            carryIn = amountIn(budget, past.from) + carryIn - spentIn(budget, past);
+            past = budgetPeriodOf(dayAfter(past.to), budget.period, startDay);
+          }
+        }
+        const amount = amountIn(budget, range.from);
+        const limit = amount + carryIn;
+        const spent = spentIn(budget, range);
         return {
-          categoryId,
-          name: text(categories.get(categoryId)!, "name")!,
+          range,
           amount,
+          carryIn,
+          limit,
           spent,
-          remaining: amount - spent,
-          used,
-          state,
+          remaining: limit - spent,
+          used: budgetUsed(spent, limit),
+          state: budgetStateOf(spent, limit, near),
         };
-      });
+      };
+      const progress: BudgetProgress[] = categoryBudgets.map((budget) => ({
+        categoryId: budget.categoryId!,
+        name: text(categories.get(budget.categoryId!)!, "name")!,
+        period: budget.period,
+        carryOver: budget.carryOver,
+        ...standing(budget),
+      }));
+      if (overallBudget === undefined) return { categories: progress };
+      const parents = effectiveParents();
+      const overall = standing(overallBudget);
+      const allocated = categoryBudgets
+        .filter((b) => b.period === overallBudget.period)
+        // A Category inside another budgeted one is already part of that budget.
+        .filter(
+          (b) =>
+            !categoryBudgets.some(
+              (other) =>
+                other.categoryId !== b.categoryId &&
+                other.period === b.period &&
+                isInside(b.categoryId!, other.categoryId!, parents),
+            ),
+        )
+        .reduce((sum, b) => sum + amountIn(b, overall.range.from), 0);
+      const standingOverall: OverallBudgetProgress = {
+        period: overallBudget.period,
+        carryOver: overallBudget.carryOver,
+        ...overall,
+        allocated,
+        unallocated: overall.amount - allocated,
+      };
+      return { categories: progress, overall: standingOverall };
     },
     async listTransactions() {
       const live = [...transactions.keys()].flatMap((id) => readTransaction(id) ?? []);

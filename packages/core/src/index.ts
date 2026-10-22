@@ -1,4 +1,18 @@
-export { daysIn, monthOf, shiftMonth, type Period } from "./periods";
+export { budgetPeriodOf, daysIn, monthOf, shiftMonth, type Period } from "./periods";
+export {
+  BUDGET_PERIODS,
+  DEFAULT_NEAR_LIMIT,
+  thresholdCrossings,
+  type Budget,
+  type BudgetPeriod,
+  type BudgetProgress,
+  type BudgetState,
+  type BudgetStanding,
+  type OverallBudget,
+  type OverallBudgetProgress,
+  type Standing,
+  type ThresholdCrossed,
+} from "./budgets";
 export {
   type CategorySpend,
   type DailyTotals,
@@ -42,10 +56,7 @@ export {
 } from "./validate";
 export {
   BALANCE_ADJUSTMENT_CATEGORY,
-  DEFAULT_NEAR_LIMIT,
-  type Budget,
-  type BudgetProgress,
-  type BudgetState,
+  type BudgetOptions,
   createEngine,
   signedAmount,
   type Account,

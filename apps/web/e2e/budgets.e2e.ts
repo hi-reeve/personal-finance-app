@@ -13,10 +13,10 @@ test.beforeEach(async ({ page }) => {
 
 async function setBudget(page: Page, category: string, amount: string) {
   await page.getByRole("button", { name: "Add budget" }).click();
-  const form = page.locator("form").filter({ hasText: "Monthly limit" });
+  const form = page.locator("form").filter({ hasText: "Carry over" });
   await form.getByRole("searchbox").fill(category);
   await form.getByRole("button", { name: new RegExp(`(^| › )${category}$`) }).click();
-  await form.getByLabel("Monthly limit").fill(amount);
+  await form.getByLabel("Limit", { exact: true }).fill(amount);
   await form.getByRole("button", { name: "Save budget" }).click();
   await expect(page.getByRole("heading", { name: category, exact: false }).first()).toBeVisible();
 }
@@ -80,7 +80,7 @@ test("a budget counts what is inside the Category, shows three states, and never
 
   // Change one, and remove one.
   await page.getByRole("button", { name: "Change Fuel" }).click();
-  await page.getByLabel("Monthly limit").fill("1,000");
+  await page.getByLabel("Limit", { exact: true }).fill("1,000");
   await page.getByRole("button", { name: "Save budget" }).click();
   await expect(card(page, "Fuel")).toContainText("On track");
   await page.getByRole("button", { name: "Remove Rent" }).click();
@@ -93,13 +93,13 @@ test("a typo in the limit is explained and a budget needs a Category", async ({ 
   await addCategory(page, "Fuel");
   await page.goto("/budgets");
   await page.getByRole("button", { name: "Add budget" }).click();
-  const form = page.locator("form").filter({ hasText: "Monthly limit" });
-  await form.getByLabel("Monthly limit").fill("100");
+  const form = page.locator("form").filter({ hasText: "Carry over" });
+  await form.getByLabel("Limit", { exact: true }).fill("100");
   await form.getByRole("button", { name: "Save budget" }).click();
   await expect(form.getByRole("alert")).toContainText("Choose a category");
   await form.getByRole("searchbox").fill("Fuel");
   await form.getByRole("button", { name: "Fuel", exact: true }).click();
-  await form.getByLabel("Monthly limit").fill("12abc");
+  await form.getByLabel("Limit", { exact: true }).fill("12abc");
   await form.getByRole("button", { name: "Save budget" }).click();
   await expect(form.getByRole("alert")).toContainText("Enter an amount above zero");
 });

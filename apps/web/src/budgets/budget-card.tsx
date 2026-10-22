@@ -1,9 +1,8 @@
-import type { BudgetProgress, BudgetState, CurrencyCode } from "@pfa/core";
+import type { BudgetPeriod, BudgetState, CurrencyCode, Standing } from "@pfa/core";
+import type { ReactNode } from "react";
 import { Amount } from "../components/amount";
 import { useMoneyText } from "../components/hide-amounts";
-import { useCategoryLabel } from "../components/category-label";
 import { useLocale } from "../components/locale";
-import type { ReadyState } from "../app/app-provider";
 import { BUTTON } from "../components/styles";
 
 /** Each state is told three ways: a colour, an icon and words, so none rests on colour alone. */
@@ -14,22 +13,23 @@ const LOOK: Record<BudgetState, { icon: string; bar: string; text: string }> = {
 };
 
 export function BudgetCard({
-  app,
+  name,
   budget,
   currency,
+  note,
   onChange,
   onRemove,
 }: {
-  app: ReadyState;
-  budget: BudgetProgress;
+  name: string;
+  budget: Standing & { period: BudgetPeriod };
   currency: CurrencyCode;
+  /** Said under the figures, for example what is not yet given to a category. */
+  note?: ReactNode;
   onChange: () => void;
   onRemove: () => void;
 }) {
-  const { t, money } = useLocale();
+  const { t, money, date } = useLocale();
   const text = useMoneyText();
-  const label = useCategoryLabel(app.categories);
-  const name = label(budget.categoryId);
   const look = LOOK[budget.state];
   const stateText = {
     "on-track": t.budget_state_on_track(),
@@ -77,12 +77,26 @@ export function BudgetCard({
         <span className="flex items-baseline gap-1">
           <Amount direction="neutral" variant="list" formatted={money(budget.spent, currency)} />
           <span aria-hidden="true">/</span>
-          <Amount direction="neutral" variant="list" formatted={money(budget.amount, currency)} />
+          <Amount direction="neutral" variant="list" formatted={money(budget.limit, currency)} />
         </span>
         <span>
           {percent}% · {text(left)}
         </span>
       </p>
+      <p className="text-sm text-ink-muted">
+        {t[`budgets_period_${budget.period}`]()} ·{" "}
+        {t.budgets_range({ from: date(budget.range.from), to: date(budget.range.to) })}
+      </p>
+      {budget.carryIn !== 0 && (
+        <p className="text-sm text-ink-muted">
+          {text(
+            budget.carryIn > 0
+              ? t.budget_carried_in({ amount: money(budget.carryIn, currency) })
+              : t.budget_carried_debt({ amount: money(-budget.carryIn, currency) }),
+          )}
+        </p>
+      )}
+      {note}
       <div className="flex gap-2">
         <button
           type="button"

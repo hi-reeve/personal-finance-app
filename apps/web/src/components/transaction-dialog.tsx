@@ -13,6 +13,7 @@ import { Portal } from "@ark-ui/react/portal";
 import { Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useApp, type ReadyState } from "../app/app-provider";
+import { useSaveWithWarning } from "../budgets/budget-notices";
 import { today } from "../app/today";
 import { formatRateInput, parseRateInput } from "../app/rate-input";
 import { useCategoryLabel } from "./category-label";
@@ -52,6 +53,7 @@ function TransactionForm({
 }) {
   const { t, money, numberFormat } = useLocale();
   const label = useCategoryLabel(app.categories);
+  const save = useSaveWithWarning(app);
   const open = app.accounts.filter((a) => a.archivedAt === undefined);
   // The chosen default, else the Account used last, else the first one.
   const lastUsed = app.activity.find((tx) => open.some((a) => a.id === tx.accountId))?.accountId;
@@ -157,7 +159,7 @@ function TransactionForm({
     setSaving(true);
     try {
       const text = { payee: payee.trim(), note: note.trim() };
-      await app.act(async (engine) => {
+      await save(date, async (engine) => {
         if (transaction === undefined) {
           await engine.recordTransaction({
             accountId,

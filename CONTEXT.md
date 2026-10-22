@@ -44,6 +44,14 @@ _Avoid_: two linked transactions
 
 **Home view**: One of three layouts of the Home dashboard (Summary, Overview, Categories). A device-local choice; all views read the same report engine, so a view never changes a number.
 
+**Budget period**: The span a budget counts over: a month (from a start day shared by all budgets, 1 to 28), a week (Monday to Sunday) or a calendar year. A budget and the budgets above and inside its Category share one period.
+
+**Overall budget**: An optional limit on all spending, independent of the Category budgets. The _unallocated_ amount is what it leaves after the top-level Category budgets of the same period.
+
+**Carry-over**: Optional per budget. What a past period left unspent is added to the next one and overspending is taken off it. Computed from Transactions each time, never stored, and never reaches back before the budget was set.
+
+**Threshold crossing**: The output saying a budget moved to _near_ or _over_ in a period. The save warning is one consumer; notifications can be another.
+
 ## Record rules
 
 - IDs are UUIDv7, generated on the device.

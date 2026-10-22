@@ -1501,6 +1501,8 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
       throw new Error(`${item.name} on ${due} was skipped: reopen it first`);
   }
 
+  const periodKey = (range: Period) => `${range.from}/${range.to}`;
+
   /** Expense occurrences in a range that nobody has paid or skipped, to set against budgets. */
   function unpaidBills(range: Period) {
     const base = readSettings().baseCurrency;
@@ -1924,7 +1926,7 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
       const billsByPeriod = new Map<string, ReturnType<typeof unpaidBills>>();
       const byPeriod = new Map<string, { each: Map<string, number>; all: number }>();
       const spentIn = (budget: StoredBudget, range: Period): number => {
-        const key = `${range.from}/${range.to}`;
+        const key = periodKey(range);
         let totals = byPeriod.get(key);
         if (totals === undefined) {
           const input = { ...base, ...range };
@@ -1949,10 +1951,10 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
         const amount = amountIn(budget, range.from);
         const limit = amount + carryIn;
         const spent = spentIn(budget, range);
-        const key = `${range.from}/${range.to}`;
-        if (!billsByPeriod.has(key)) billsByPeriod.set(key, unpaidBills(range));
+        if (!billsByPeriod.has(periodKey(range)))
+          billsByPeriod.set(periodKey(range), unpaidBills(range));
         const bills = billsByPeriod
-          .get(key)!
+          .get(periodKey(range))!
           .filter(
             (bill) =>
               budget.categoryId === undefined ||

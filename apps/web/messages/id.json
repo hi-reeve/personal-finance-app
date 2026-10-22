@@ -427,8 +427,6 @@
   "recurring_status_ended": "Berakhir",
   "recurring_pause": "Jeda {name}",
   "recurring_resume": "Lanjutkan {name}",
-  "recurring_price_now": "{amount} saat ini",
-  "recurring_subscription_badge": "Langganan",
   "budget_expected": "Tagihan yang belum dibayar: {amount}",
   "budget_after_bills": "Setelah tagihan: sisa {amount}",
   "budget_after_bills_over": "Setelah tagihan: lebih {amount}",

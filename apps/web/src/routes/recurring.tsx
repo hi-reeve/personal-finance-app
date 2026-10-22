@@ -145,8 +145,9 @@ function Recurring({ app }: { app: ReadyState }) {
           <p className="text-ink-muted">{t.recurring_empty()}</p>
         )}
         <ul className="flex flex-col gap-3">
-          {app.recurring.map((item) =>
-            editing === item.id ? (
+          {app.recurring.map((item) => {
+            const paused = isPausedOn(item, now);
+            return editing === item.id ? (
               <li key={item.id}>
                 <RecurringForm app={app} item={item} onDone={close} onCancel={close} />
               </li>
@@ -183,13 +184,13 @@ function Recurring({ app }: { app: ReadyState }) {
                     type="button"
                     className={BUTTON}
                     aria-label={
-                      isPausedOn(item, now)
+                      paused
                         ? t.recurring_resume({ name: item.name })
                         : t.recurring_pause({ name: item.name })
                     }
                     onClick={() =>
                       void attempt((engine) =>
-                        isPausedOn(item, now)
+                        paused
                           ? engine.resumeRecurring(item.id, now)
                           : engine.pauseRecurring(item.id, now),
                       )
@@ -217,8 +218,8 @@ function Recurring({ app }: { app: ReadyState }) {
                   </button>
                 </div>
               </li>
-            ),
-          )}
+            );
+          })}
         </ul>
         {editing === "new" ? (
           <RecurringForm app={app} onDone={close} onCancel={close} />

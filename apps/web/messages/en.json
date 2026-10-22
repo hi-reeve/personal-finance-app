@@ -427,8 +427,6 @@
   "recurring_status_ended": "Ended",
   "recurring_pause": "Pause {name}",
   "recurring_resume": "Resume {name}",
-  "recurring_price_now": "{amount} now",
-  "recurring_subscription_badge": "Subscription",
   "budget_expected": "Bills still to pay: {amount}",
   "budget_after_bills": "After bills: {amount} left",
   "budget_after_bills_over": "After bills: {amount} over",

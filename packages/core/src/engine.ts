@@ -15,6 +15,21 @@ import {
   type Standing,
 } from "./budgets";
 import { budgetPeriodOf, dayAfter, type Period } from "./periods";
+import {
+  DEFAULT_DUE_SOON_DAYS,
+  RECURRING_KINDS,
+  RECURRING_UNITS,
+  dueDates,
+  daysBetween,
+  occurrenceId,
+  openStatus,
+  type MarkPaidOptions,
+  type NewRecurring,
+  type Occurrence,
+  type OccurrenceQuery,
+  type RecurringItem,
+  type RecurringPatch,
+} from "./recurring";
 import type { Entity, Op, OpValue } from "./ops";
 import {
   currencyCodes,
@@ -382,6 +397,44 @@ export interface Engine {
    * Transactions each time. A Transaction is never blocked by any of this.
    */
   budgetProgress(on: string): Promise<BudgetStanding>;
+  /** Makes a template for something that repeats: a bill, a salary, a standing transfer. */
+  createRecurring(input: NewRecurring): Promise<RecurringItem>;
+  /** Changes future occurrences only: paid and skipped ones keep what they expected. */
+  updateRecurring(id: string, patch: RecurringPatch): Promise<RecurringItem>;
+  /** The Transactions and Transfers already made stay. */
+  deleteRecurring(id: string): Promise<void>;
+  listRecurring(): Promise<RecurringItem[]>;
+  /**
+   * Due dates worked out from the templates, each with where it stands. Without `from` only the
+   * occurrences nobody acted on come back, overdue ones included: nothing disappears with time.
+   */
+  listOccurrences(query: OccurrenceQuery): Promise<Occurrence[]>;
+  /**
+   * Pays an occurrence: makes the Transaction or Transfer from the template (amount and date can
+   * differ) and links it. Nothing counts toward budgets or reports before this.
+   */
+  markPaid(
+    itemId: string,
+    due: string,
+    options?: MarkPaidOptions,
+  ): Promise<{ transaction?: Transaction; transfer?: Transfer }>;
+  /** Transactions and Transfers near a due date that fit the item, to link instead of paying. */
+  linkCandidates(
+    itemId: string,
+    due: string,
+    windowDays?: number,
+  ): Promise<{ transactions: Transaction[]; transfers: Transfer[] }>;
+  /** Counts an existing Transaction or Transfer as the payment. */
+  linkOccurrence(
+    itemId: string,
+    due: string,
+    target: { transactionId: string } | { transferId: string },
+  ): Promise<void>;
+  skipOccurrence(itemId: string, due: string): Promise<void>;
+  /** Puts a skipped occurrence back among those to act on. */
+  reopenOccurrence(itemId: string, due: string): Promise<void>;
+  /** Skips every occurrence of the item before `before` that nobody acted on. Returns how many. */
+  skipOlder(itemId: string, before: string): Promise<number>;
   /** Income and spending per calendar month across a range, for trends. */
   monthlyTotals(query: { from: string; to: string }): Promise<MonthlyTotals>;
   /** Live Transactions, oldest date first. A Transfer's fee is included; the Transfer is not. */
@@ -428,6 +481,8 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
   const taggings = new Map<string, Fields>();
   const transfers = new Map<string, Fields>();
   const budgets = new Map<string, Fields>();
+  const recurringItems = new Map<string, Fields>();
+  const occurrences = new Map<string, Fields>();
   const tables: Record<Entity, Map<string, Fields>> = {
     transaction: transactions,
     line: lines,
@@ -438,6 +493,8 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
     tagging: taggings,
     transfer: transfers,
     budget: budgets,
+    recurring: recurringItems,
+    occurrence: occurrences,
   };
   const table = (entity: Entity) => tables[entity];
 
@@ -1227,7 +1284,191 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
     return readTransaction(id)!;
   }
 
-  return {
+  // --- Public API
+
+  // --- Recurring items
+
+  const DEFAULT_WINDOW_DAYS = 15;
+
+  function liveItem(id: string): Fields | undefined {
+    const f = recurringItems.get(id);
+    return f !== undefined && f.has("name") && Number(f.get("deletedAt")?.value ?? 0) <= 0
+      ? f
+      : undefined;
+  }
+
+  function readItem(id: string): RecurringItem {
+    const f = recurringItems.get(id)!;
+    const number = (name: string) => (f.has(name) ? Number(f.get(name)!.value) : undefined);
+    const optional = (name: string) => text(f, name) || undefined;
+    const endDate = optional("endDate");
+    const endCount = number("endCount");
+    const toAmount = number("toAmount") || undefined;
+    return {
+      id,
+      name: text(f, "name")!,
+      kind: text(f, "kind") as RecurringItem["kind"],
+      accountId: text(f, "accountId")!,
+      ...(optional("toAccountId") ? { toAccountId: optional("toAccountId")! } : {}),
+      ...(optional("categoryId") ? { categoryId: optional("categoryId")! } : {}),
+      amount: number("amount")!,
+      ...(toAmount !== undefined ? { toAmount } : {}),
+      every: number("every")!,
+      unit: text(f, "unit") as RecurringItem["unit"],
+      start: text(f, "start")!,
+      lastDay: number("lastDay") === 1,
+      ...(endDate !== undefined ? { endDate } : {}),
+      ...(endCount ? { endCount } : {}),
+      createdAt: number("createdAt")!,
+    };
+  }
+
+  function assertItem(id: string): RecurringItem {
+    if (liveItem(id) === undefined) throw new Error(`Recurring item ${id} does not exist`);
+    return readItem(id);
+  }
+
+  function checkItem(next: RecurringItem | (NewRecurring & { id?: undefined })) {
+    if (next.name.trim() === "") throw new Error("A recurring item needs a name");
+    if (!RECURRING_KINDS.includes(next.kind)) throw new Error(`Invalid kind "${next.kind}"`);
+    assertAccount(next.accountId);
+    if (next.kind === "transfer") {
+      if (next.categoryId !== undefined) throw new Error("A transfer has no Category");
+      if (next.toAccountId === undefined) throw new Error("A transfer needs a destination Account");
+      assertAccount(next.toAccountId);
+      if (next.toAccountId === next.accountId)
+        throw new Error("A transfer needs two different Accounts");
+    } else {
+      if (next.toAccountId !== undefined) throw new Error("Only a transfer has a destination");
+      if (next.toAmount !== undefined) throw new Error("Only a transfer has a destination amount");
+      if (next.categoryId === undefined) throw new Error("An expense or income needs a Category");
+      assertCategory(next.categoryId);
+      if (categoryKind(next.categoryId) !== next.kind)
+        throw new Error(`The Category must be an ${next.kind} Category`);
+    }
+    for (const amount of [next.amount, next.toAmount]) {
+      if (amount === undefined) continue;
+      assertAmount(amount);
+      if (amount <= 0) throw new Error("The amount must be above zero");
+    }
+    if (!Number.isSafeInteger(next.every) || next.every <= 0)
+      throw new Error("Every must be a whole number above zero");
+    if (!RECURRING_UNITS.includes(next.unit)) throw new Error(`Invalid unit "${next.unit}"`);
+    assertDate(next.start);
+    if (next.endDate !== undefined) {
+      assertDate(next.endDate);
+      if (next.endDate < next.start) throw new Error("The end date is before the start");
+    }
+    if (next.endCount !== undefined && (!Number.isSafeInteger(next.endCount) || next.endCount <= 0))
+      throw new Error("The number of occurrences must be a whole number above zero");
+  }
+
+  /** The item's fields as ops values; an empty string clears an optional one. */
+  function itemValues(item: Partial<RecurringItem>): Record<string, OpValue | undefined> {
+    return {
+      name: item.name?.trim(),
+      kind: item.kind,
+      accountId: item.accountId,
+      toAccountId: item.toAccountId,
+      categoryId: item.categoryId,
+      amount: item.amount,
+      toAmount: item.toAmount,
+      every: item.every,
+      unit: item.unit,
+      start: item.start,
+      lastDay: item.lastDay === undefined ? undefined : item.lastDay ? 1 : 0,
+      endDate: item.endDate,
+      endCount: item.endCount,
+    };
+  }
+
+  function assertScheduled(item: RecurringItem, due: string) {
+    assertDate(due);
+    if (dueDates(item, due, due).length === 0) throw new Error(`${item.name} is not due on ${due}`);
+  }
+
+  /** What became of an occurrence: paid (with what pays it), skipped, or still to act on. */
+  function resolution(item: RecurringItem, due: string) {
+    const f = occurrences.get(occurrenceId(item.id, due));
+    const expected = f?.has("expected") ? Number(f.get("expected")!.value) : item.amount;
+    const status = f && text(f, "status");
+    if (status === "skipped") return { state: "skipped" as const, expected };
+    if (status === "paid") {
+      const transactionId = text(f!, "transactionId") || undefined;
+      const transferId = text(f!, "transferId") || undefined;
+      const transaction = transactionId ? readTransaction(transactionId) : undefined;
+      const transfer =
+        transferId && isLiveTransfer(transferId) ? readTransfer(transferId) : undefined;
+      // A payment that was deleted no longer pays the bill.
+      if (transaction || transfer)
+        return { state: "paid" as const, expected, transaction, transfer };
+    }
+    return { state: "open" as const, expected };
+  }
+
+  function occurrenceOf(
+    item: RecurringItem,
+    due: string,
+    today: string,
+    dueSoonDays: number,
+  ): Occurrence {
+    const found = resolution(item, due);
+    const paid =
+      found.state === "paid"
+        ? found.transaction
+          ? Math.abs(found.transaction.total)
+          : found.transfer!.fromAmount
+        : undefined;
+    const status = found.state === "open" ? openStatus(due, today, dueSoonDays) : found.state;
+    return {
+      id: occurrenceId(item.id, due),
+      itemId: item.id,
+      name: item.name,
+      kind: item.kind,
+      accountId: item.accountId,
+      ...(item.toAccountId ? { toAccountId: item.toAccountId } : {}),
+      ...(item.categoryId ? { categoryId: item.categoryId } : {}),
+      due,
+      status,
+      expected: found.expected,
+      ...(paid !== undefined ? { paid, difference: found.expected - paid } : {}),
+      ...(found.state === "paid" && found.transaction
+        ? { transactionId: found.transaction.id }
+        : {}),
+      ...(found.state === "paid" && found.transfer ? { transferId: found.transfer.id } : {}),
+    };
+  }
+
+  function resolveOps(
+    item: RecurringItem,
+    due: string,
+    values: Record<string, OpValue | undefined>,
+  ): Op[] {
+    return opsFor("occurrence", occurrenceId(item.id, due), {
+      itemId: item.id,
+      due,
+      expected: resolution(item, due).expected,
+      resolvedAt: clock.now(),
+      ...values,
+    });
+  }
+
+  function assertOpen(item: RecurringItem, due: string) {
+    assertScheduled(item, due);
+    const found = resolution(item, due);
+    if (found.state === "paid") throw new Error(`${item.name} on ${due} is already paid`);
+    if (found.state === "skipped")
+      throw new Error(`${item.name} on ${due} was skipped: reopen it first`);
+  }
+
+  /** Occurrences of an item before a date that nobody has acted on. */
+  function openBefore(item: RecurringItem, before: string): string[] {
+    return dueDates(item, item.start, before).filter(
+      (due) => due < before && resolution(item, due).state === "open",
+    );
+  }
+
+  const engine: Engine = {
     recordTransaction: record,
     async editTransaction(id, patch) {
       assertLive(id);
@@ -1689,6 +1930,187 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
       };
       return { categories: progress, overall: standingOverall };
     },
+    async createRecurring(input) {
+      const item = { lastDay: false, ...input };
+      checkItem(item);
+      const id = newUuidV7(clock, random);
+      await commit(
+        opsFor("recurring", id, {
+          ...itemValues({
+            ...item,
+            lastDay: item.lastDay && (item.unit === "month" || item.unit === "year"),
+          }),
+          createdAt: clock.now(),
+          deletedAt: 0,
+        }),
+      );
+      return readItem(id);
+    },
+    async updateRecurring(id, patch) {
+      const current = assertItem(id);
+      const { endDate, endCount, toAmount, categoryId, toAccountId, ...rest } = patch;
+      const next = { ...current, ...rest } as RecurringItem;
+      for (const [key, value] of [
+        ["endDate", endDate],
+        ["endCount", endCount],
+        ["toAmount", toAmount],
+        ["categoryId", categoryId],
+        ["toAccountId", toAccountId],
+      ] as const) {
+        if (value === undefined) continue;
+        if (value === null) delete (next as unknown as Record<string, unknown>)[key];
+        else (next as unknown as Record<string, unknown>)[key] = value;
+      }
+      checkItem(next);
+      await commit(
+        opsFor("recurring", id, {
+          ...itemValues(rest),
+          ...Object.fromEntries(
+            Object.entries({ endDate, endCount, toAmount, categoryId, toAccountId })
+              .filter(([, value]) => value !== undefined)
+              .map(([key, value]) => [key, value === null ? "" : (value as OpValue)]),
+          ),
+        }),
+      );
+      return readItem(id);
+    },
+    async deleteRecurring(id) {
+      assertItem(id);
+      await commit(opsFor("recurring", id, { deletedAt: clock.now() }));
+    },
+    listRecurring: async () =>
+      [...recurringItems.keys()]
+        .filter((id) => liveItem(id) !== undefined)
+        .sort(creationOrder(recurringItems))
+        .map(readItem),
+    async listOccurrences(query) {
+      assertDate(query.to);
+      assertDate(query.today);
+      const soon = query.dueSoonDays ?? DEFAULT_DUE_SOON_DAYS;
+      const found: Occurrence[] = [];
+      for (const id of [...recurringItems.keys()].sort(creationOrder(recurringItems))) {
+        if (liveItem(id) === undefined) continue;
+        const item = readItem(id);
+        const due = new Set(dueDates(item, query.from ?? item.start, query.to));
+        if (query.from !== undefined)
+          // A paid or skipped occurrence stays in the history even if the schedule moved away.
+          for (const f of occurrences.values())
+            if (text(f, "itemId") === id && text(f, "status") !== "open") {
+              const at = text(f, "due")!;
+              if (at >= query.from && at <= query.to) due.add(at);
+            }
+        for (const at of due) {
+          const occurrence = occurrenceOf(item, at, query.today, soon);
+          if (
+            query.from !== undefined ||
+            ["upcoming", "due-soon", "overdue"].includes(occurrence.status)
+          )
+            found.push(occurrence);
+        }
+      }
+      return found.sort((a, b) => (a.due < b.due ? -1 : a.due > b.due ? 1 : 0));
+    },
+    async markPaid(itemId, due, options = {}) {
+      const item = assertItem(itemId);
+      assertOpen(item, due);
+      const amount = options.amount ?? item.amount;
+      const date = options.date ?? due;
+      const note = options.note;
+      if (item.kind === "transfer") {
+        const transfer = await engine.recordTransfer({
+          fromAccountId: item.accountId,
+          toAccountId: item.toAccountId!,
+          date,
+          fromAmount: amount,
+          toAmount: options.toAmount ?? item.toAmount ?? amount,
+          ...(note ? { note } : {}),
+        });
+        await commit(resolveOps(item, due, { status: "paid", transferId: transfer.id }));
+        return { transfer };
+      }
+      const transaction = await record({
+        accountId: item.accountId,
+        date,
+        payee: item.name,
+        ...(note ? { note } : {}),
+        ...(options.rate !== undefined ? { rate: options.rate } : {}),
+        lines: [{ categoryId: item.categoryId!, amount: signedAmount(item.kind, amount) }],
+      });
+      await commit(resolveOps(item, due, { status: "paid", transactionId: transaction.id }));
+      return { transaction };
+    },
+    async linkCandidates(itemId, due, windowDays = DEFAULT_WINDOW_DAYS) {
+      const item = assertItem(itemId);
+      assertScheduled(item, due);
+      const near = (date: string) => Math.abs(daysBetween(due, date)) <= windowDays;
+      const taken = new Set(
+        [...occurrences.values()].flatMap((f) => [text(f, "transactionId"), text(f, "transferId")]),
+      );
+      if (item.kind === "transfer")
+        return {
+          transactions: [],
+          transfers: [...transfers.keys()]
+            .filter(isLiveTransfer)
+            .map(readTransfer)
+            .filter(
+              (t) =>
+                t.fromAccountId === item.accountId &&
+                t.toAccountId === item.toAccountId &&
+                near(t.date) &&
+                !taken.has(t.id),
+            ),
+        };
+      return {
+        transactions: [...transactions.keys()]
+          .flatMap((id) => readTransaction(id) ?? [])
+          .filter(
+            (tx) =>
+              tx.accountId === item.accountId &&
+              !tx.transferId &&
+              (item.kind === "expense" ? tx.total < 0 : tx.total > 0) &&
+              tx.lines.every((line) => line.categoryId !== BALANCE_ADJUSTMENT_CATEGORY) &&
+              near(tx.date) &&
+              !taken.has(tx.id),
+          )
+          .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)),
+        transfers: [],
+      };
+    },
+    async linkOccurrence(itemId, due, target) {
+      const item = assertItem(itemId);
+      assertOpen(item, due);
+      if ("transferId" in target) {
+        assertTransferLive(target.transferId);
+        const t = readTransfer(target.transferId);
+        if (item.kind !== "transfer" || t.fromAccountId !== item.accountId)
+          throw new Error("This Transfer does not fit the recurring item");
+        await commit(resolveOps(item, due, { status: "paid", transferId: target.transferId }));
+        return;
+      }
+      assertLive(target.transactionId);
+      const tx = readTransaction(target.transactionId)!;
+      if (item.kind === "transfer" || tx.accountId !== item.accountId)
+        throw new Error("This Transaction does not fit the recurring item");
+      await commit(resolveOps(item, due, { status: "paid", transactionId: target.transactionId }));
+    },
+    async skipOccurrence(itemId, due) {
+      const item = assertItem(itemId);
+      assertOpen(item, due);
+      await commit(resolveOps(item, due, { status: "skipped" }));
+    },
+    async reopenOccurrence(itemId, due) {
+      const item = assertItem(itemId);
+      assertScheduled(item, due);
+      if (resolution(item, due).state !== "skipped") throw new Error("Only a skipped one reopens");
+      await commit(resolveOps(item, due, { status: "open" }));
+    },
+    async skipOlder(itemId, before) {
+      const item = assertItem(itemId);
+      assertDate(before);
+      const older = openBefore(item, before);
+      await commit(older.flatMap((due) => resolveOps(item, due, { status: "skipped" })));
+      return older.length;
+    },
     async listTransactions() {
       const live = [...transactions.keys()].flatMap((id) => readTransaction(id) ?? []);
       return live.sort((a, b) => (a.date === b.date ? byId(a, b) : a.date < b.date ? -1 : 1));
@@ -1696,4 +2118,5 @@ export async function createEngine(options: EngineOptions): Promise<Engine> {
     exportOps: () => store.readAll(),
     applyOps: (ops) => commit(ops),
   };
+  return engine;
 }

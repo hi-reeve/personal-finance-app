@@ -432,5 +432,21 @@
   "budget_after_bills_over": "Setelah tagihan: lebih {amount}",
   "budget_expected_skipped": "Tagihan dalam mata uang lain tidak dihitung: {count}",
   "recurring_status_resume": "Lanjutkan",
-  "recurring_status_pause": "Jeda"
+  "recurring_status_pause": "Jeda",
+  "rate_mode_label": "Kurs",
+  "rate_mode_recorded": "Sesuai catatan",
+  "rate_mode_today": "Kurs hari ini",
+  "rates_looking_up": "Mencari kurs hari ini…",
+  "rate_effect_higher": "Dengan kurs hari ini, pengeluaran akan {amount} lebih tinggi dari yang tercatat.",
+  "rate_effect_lower": "Dengan kurs hari ini, pengeluaran akan {amount} lebih rendah dari yang tercatat.",
+  "rate_effect_same": "Dengan kurs hari ini, pengeluaran akan sama dengan yang tercatat.",
+  "rate_no_rate": "Tidak ada kurs hari ini untuk {currencies}. Baris itu dilewati, bukan ditebak.",
+  "display_view_title": "Tampilan dalam {currency}",
+  "display_view_note": "Dikonversi dengan kurs hari ini, 1 {base} = {rate} {currency}. Hanya tampilan: catatanmu tetap dalam {base}.",
+  "display_view_no_rate": "Tidak ada kurs hari ini dari {base} ke {currency}, jadi tidak ada yang bisa ditampilkan dalam {currency}.",
+  "display_view_loading": "Mencari kurs ke {currency}…",
+  "settings_display": "Mata uang tampilan",
+  "label_display_currency": "Tampilkan juga total dalam",
+  "settings_display_note": "Beranda bisa menampilkan totalnya dalam mata uang kedua dengan kurs hari ini. Hanya tampilan: tidak pernah mengubah datamu.",
+  "settings_display_none": "Tidak ada"
 }

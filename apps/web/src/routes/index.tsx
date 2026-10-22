@@ -8,6 +8,13 @@ import { useLocale } from "../components/locale";
 import { Page } from "../components/page";
 import { CategoryTree } from "../dashboard/category-tree";
 import { OverviewView } from "../dashboard/overview-view";
+import {
+  DisplayCurrencyView,
+  RateEffectNote,
+  RateModeSwitch,
+  type RateMode,
+} from "../dashboard/rate-controls";
+import { useTodaysRates } from "../dashboard/use-rates";
 import { Hero, SkippedNote } from "../dashboard/summary-view";
 import { ViewSwitcher, useHomeView } from "../dashboard/view-switcher";
 import { PeriodSelector } from "../dashboard/period-selector";
@@ -25,7 +32,14 @@ function Home() {
 function Dashboard({ app }: { app: ReadyState }) {
   const { t } = useLocale();
   const [period, setPeriod] = useState<Period>(() => monthOf(today()));
-  const summary = useSummary(app, period);
+  const now = today();
+  const base = app.settings.baseCurrency;
+  const foreign = [...new Set(app.accounts.map((a) => a.currency))].filter((c) => c !== base);
+  const [mode, setMode] = useState<RateMode>("recorded");
+  const rates = useTodaysRates(mode === "today" ? foreign : [], base, now);
+  const todayRates = mode === "today" && rates.status === "ready" ? rates.rates : undefined;
+  const summary = useSummary(app, period, todayRates);
+  const waiting = mode === "today" && rates.status === "loading";
   const [view, setView] = useHomeView();
   return (
     <Page title={t.app_name()}>
@@ -33,9 +47,14 @@ function Dashboard({ app }: { app: ReadyState }) {
         <PeriodSelector period={period} onChange={setPeriod} />
         <HideAmountsToggle />
       </div>
+      {foreign.length > 0 && <RateModeSwitch value={mode} onChange={setMode} />}
       <ViewSwitcher value={view} onChange={setView} />
-      {summary.status === "ready" ? (
+      {waiting ? (
+        <p className="text-ink-muted">{t.rates_looking_up()}</p>
+      ) : summary.status === "ready" ? (
         <>
+          <RateEffectNote data={summary.data} />
+          <DisplayCurrencyView data={summary.data} today={now} />
           <Hero data={summary.data} />
           {view === "summary" ? (
             <SummaryView data={summary.data} />

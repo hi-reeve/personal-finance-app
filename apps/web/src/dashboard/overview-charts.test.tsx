@@ -24,6 +24,7 @@ const spending: SpendingByCategory = {
   to: "2026-10-31",
   total: 1_000_000,
   skipped: { lines: 0 },
+  noRate: [],
   categories: [
     cat("a", "Food", 400_000, 4_000),
     cat("b", "Rent", 300_000, 3_000),

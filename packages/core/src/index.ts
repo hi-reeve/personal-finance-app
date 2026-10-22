@@ -39,6 +39,7 @@ export {
   type DailyTotals,
   type MonthlyTotal,
   type MonthlyTotals,
+  type RateEffect,
   type SpendingByCategory,
   type SpendingQuery,
 } from "./reports";

@@ -20,6 +20,7 @@ const DEVICE = {
   accent: "device",
   colors: "device",
   hideAmountsStart: "device",
+  displayCurrency: "device",
 } as const;
 
 export const SETTING_SCOPES = { ...SYNCED, ...DEVICE } as const;
@@ -31,4 +32,5 @@ export const DEVICE_STORAGE_KEYS: Record<keyof typeof DEVICE, string> = {
   accent: "pfa.appearance",
   colors: "pfa.appearance",
   hideAmountsStart: "pfa.hideAmountsStart",
+  displayCurrency: "pfa.displayCurrency",
 };

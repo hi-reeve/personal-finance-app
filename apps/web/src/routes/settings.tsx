@@ -1,7 +1,9 @@
 import { PROTOCOL_VERSION } from "@pfa/protocol";
 import { createFileRoute } from "@tanstack/react-router";
 import type { ReactNode } from "react";
+import { useApp } from "../app/app-provider";
 import { Amount } from "../components/amount";
+import { DisplayCurrencyChoice } from "../dashboard/rate-controls";
 import { AppearanceControls, Choice } from "../components/appearance";
 import {
   BudgetLimitControl,
@@ -77,6 +79,7 @@ function HideAmountsChoice() {
 
 function Settings() {
   const { t, money, date } = useLocale();
+  const app = useApp();
   return (
     <Page title={t.nav_settings()}>
       <p className="-mt-4 text-sm text-ink-muted">
@@ -94,6 +97,12 @@ function Settings() {
       <Section id="budgets" title={t.settings_budgets()} scope="synced">
         <BudgetLimitControl />
         <BudgetStartDayControl />
+      </Section>
+
+      <Section id="display-currency" title={t.settings_display()} scope="device">
+        <DisplayCurrencyChoice
+          base={app.status === "ready" ? app.settings.baseCurrency : undefined}
+        />
       </Section>
 
       <Section id="appearance" title={t.section_appearance()} scope="device">

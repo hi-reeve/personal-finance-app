@@ -432,5 +432,21 @@
   "budget_after_bills_over": "After bills: {amount} over",
   "budget_expected_skipped": "Bills in another currency are not counted: {count}",
   "recurring_status_resume": "Resume",
-  "recurring_status_pause": "Pause"
+  "recurring_status_pause": "Pause",
+  "rate_mode_label": "Rates",
+  "rate_mode_recorded": "As recorded",
+  "rate_mode_today": "At today's rate",
+  "rates_looking_up": "Looking up today's rates…",
+  "rate_effect_higher": "At today's rates, spending would be {amount} higher than recorded.",
+  "rate_effect_lower": "At today's rates, spending would be {amount} lower than recorded.",
+  "rate_effect_same": "At today's rates, spending would be the same as recorded.",
+  "rate_no_rate": "No rate today for {currencies}. Those Lines are left out, not guessed.",
+  "display_view_title": "View in {currency}",
+  "display_view_note": "Converted at today's rate, 1 {base} = {rate} {currency}. Only a view: your records stay in {base}.",
+  "display_view_no_rate": "No rate today from {base} to {currency}, so there is nothing to show in {currency}.",
+  "display_view_loading": "Looking up the rate to {currency}…",
+  "settings_display": "Display currency",
+  "label_display_currency": "Also show totals in",
+  "settings_display_note": "Home can show its totals in a second currency at today's rate. It is only a view: it never changes your data.",
+  "settings_display_none": "None"
 }

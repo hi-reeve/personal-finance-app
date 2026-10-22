@@ -1,5 +1,20 @@
 export { budgetPeriodOf, daysIn, monthOf, shiftMonth, type Period } from "./periods";
 export {
+  DEFAULT_DUE_SOON_DAYS,
+  RECURRING_KINDS,
+  RECURRING_UNITS,
+  type MarkPaidOptions,
+  type NewRecurring,
+  type Occurrence,
+  type OccurrenceQuery,
+  type OccurrenceStatus,
+  type RecurringItem,
+  type RecurringKind,
+  type RecurringPatch,
+  type RecurringUnit,
+  type Schedule,
+} from "./recurring";
+export {
   BUDGET_PERIODS,
   DEFAULT_NEAR_LIMIT,
   thresholdCrossings,

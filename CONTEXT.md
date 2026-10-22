@@ -52,6 +52,10 @@ _Avoid_: two linked transactions
 
 **Threshold crossing**: The output saying a budget moved to _near_ or _over_ in a period. The save warning is one consumer; notifications can be another.
 
+**Recurring item**: A template for something that repeats (a bill, a salary, a standing transfer): kind, Account, Category, amount and a schedule. Occurrences are worked out from it and never stored until acted on.
+
+**Occurrence**: One due date of a Recurring item: upcoming, due soon, overdue, paid or skipped. Only paid and skipped ones are stored, under an id made from the item and the due date. It counts toward budgets and reports only once a real Transaction or Transfer pays it.
+
 ## Record rules
 
 - IDs are UUIDv7, generated on the device.

@@ -11,7 +11,9 @@ export type Entity =
   | "tag"
   | "tagging"
   | "transfer"
-  | "budget";
+  | "budget"
+  | "recurring"
+  | "occurrence";
 
 /** One field of one record set to a value. The op log is a list of these. */
 export interface Op {

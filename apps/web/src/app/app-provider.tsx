@@ -6,6 +6,7 @@ import {
   type CurrencyCode,
   type Engine,
   type NewAccount,
+  type RecurringItem,
   type OverallBudget,
   type Settings,
   type Tag,
@@ -57,6 +58,8 @@ export interface Snapshot {
   accounts: AccountView[];
   /** Budgets, one per expense Category. */
   budgets: Budget[];
+  /** Templates for bills, income and standing transfers. */
+  recurring: RecurringItem[];
   /** The budget over all spending, when there is one. */
   overallBudget?: OverallBudget;
   /** How many budgets are over their limit in their current period, for the Plan badge. */
@@ -136,6 +139,7 @@ async function snapshot(engine: Engine): Promise<Snapshot> {
     categories,
     categoryUse,
     budgets: await engine.listBudgets(),
+    recurring: await engine.listRecurring(),
     ...(overallBudget ? { overallBudget } : {}),
     budgetsOver: [...standing.categories, ...(standing.overall ? [standing.overall] : [])].filter(
       (b) => b.state === "over",
